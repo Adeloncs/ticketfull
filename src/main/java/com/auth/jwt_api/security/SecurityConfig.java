@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -56,6 +57,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Apenas organizadores (ou admin) criam eventos e definem lotes
+                        .requestMatchers(HttpMethod.POST, "/events").hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
