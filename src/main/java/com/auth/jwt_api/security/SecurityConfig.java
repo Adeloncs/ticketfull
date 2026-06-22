@@ -60,6 +60,8 @@ public class SecurityConfig {
                         // Apenas organizadores (ou admin) criam eventos e definem lotes
                         .requestMatchers(HttpMethod.POST, "/events").hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
+                        // Apenas clientes (ou admin) compram ingressos
+                        .requestMatchers(HttpMethod.POST, "/orders").hasAnyRole("CUSTOMER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception

@@ -66,4 +66,12 @@ public class TicketBatch {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /**
+     * Reduz a disponibilidade do lote. A precondição (assentos suficientes) é
+     * validada no service, que lança a exceção de negócio apropriada.
+     */
+    public void decreaseAvailableSeats(int quantity) {
+        this.availableSeats -= quantity;
+    }
 }
