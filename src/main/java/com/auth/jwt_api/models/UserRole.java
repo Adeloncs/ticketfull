@@ -2,7 +2,9 @@ package com.auth.jwt_api.models;
 
 public enum UserRole {
     ADMIN("admin"),
-    USER("user");
+    USER("user"),
+    ORGANIZER("organizer"),
+    CUSTOMER("customer");
 
     private final String role;
 
