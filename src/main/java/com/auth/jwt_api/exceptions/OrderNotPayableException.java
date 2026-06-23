@@ -12,4 +12,9 @@ public class OrderNotPayableException extends BusinessException {
         super("Order " + id + " cannot be paid because its status is " + currentStatus,
                 HttpStatus.CONFLICT);
     }
+
+    public OrderNotPayableException(UUID id) {
+        super("Order " + id + " cannot be paid because its reservation has expired",
+                HttpStatus.CONFLICT);
+    }
 }

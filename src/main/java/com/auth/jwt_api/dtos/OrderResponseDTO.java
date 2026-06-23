@@ -14,6 +14,7 @@ public record OrderResponseDTO(
         UUID eventId,
         OrderStatus status,
         BigDecimal totalAmount,
+        Instant expiresAt,
         List<TicketResponseDTO> tickets,
         Instant createdAt) {
 
@@ -24,6 +25,7 @@ public record OrderResponseDTO(
                 order.getEvent().getId(),
                 order.getStatus(),
                 order.getTotalAmount(),
+                order.getExpiresAt(),
                 order.getTickets().stream().map(TicketResponseDTO::from).toList(),
                 order.getCreatedAt());
     }

@@ -38,9 +38,11 @@ Regras de acesso:
 - `POST /events`: `ORGANIZER` ou `ADMIN`
 - `POST /events/{eventId}/ticket-batches`: `ORGANIZER` ou `ADMIN`
 - `POST /orders`: `CUSTOMER` ou `ADMIN`
-- `POST /orders/{id}/pay`: `CUSTOMER` ou `ADMIN`
+- `POST /orders/{id}/checkout`: `CUSTOMER` ou `ADMIN`
 - `POST /orders/{id}/cancel`: `CUSTOMER` ou `ADMIN`
+- `POST /orders/{id}/refund`: `CUSTOMER` ou `ADMIN`
 - `POST /tickets/{codeHash}/validate`: `ORGANIZER` ou `ADMIN`
+- `POST /webhooks/payments`: publica (callback do gateway de pagamento)
 - `GET /events`, `GET /events/{id}`, `GET /events/{eventId}/ticket-batches`: publicas (sem autenticacao)
 - Demais rotas fora de `/auth` exigem autenticacao
 
@@ -295,6 +297,7 @@ Response `201 Created`:
   "eventId": "8bd8d0b3-e0d7-47b0-bb0f-5a9900fa9772",
   "status": "PENDING",
   "totalAmount": 199.80,
+  "expiresAt": "2026-06-23T12:45:00Z",
   "tickets": [
     {
       "id": "65f67d85-d805-4d3e-9ad0-098dcb1fa421",
@@ -313,11 +316,17 @@ Response `201 Created`:
 }
 ```
 
+Ao criar o pedido os assentos sao retidos e o campo `expiresAt` define o prazo da reserva
+(padrao 15 min, via `app.order.reservation-minutes`). Reservas `PENDING` vencidas sao expiradas
+automaticamente por um job agendado, que devolve os assentos ao lote.
+
 Status possiveis de pedido:
 
-- `PENDING`
-- `PAID`
-- `CANCELLED`
+- `PENDING` - reserva aguardando pagamento (assentos retidos ate `expiresAt`)
+- `PAID` - pagamento confirmado pelo gateway via webhook
+- `CANCELLED` - cancelado pelo cliente antes do pagamento
+- `EXPIRED` - reserva expirada sem pagamento (assentos devolvidos)
+- `REFUNDED` - pedido pago e posteriormente estornado
 
 Status possiveis de ingresso:
 
@@ -340,26 +349,76 @@ Requer autenticacao.
 
 Response `200 OK`: mesmo formato de pedido.
 
-### 13. Confirmar pagamento
+### 13. Iniciar checkout (pagamento)
 
-`POST /orders/{id}/pay`
+`POST /orders/{id}/checkout`
 
 Requer `Authorization: Bearer <token>` com perfil `CUSTOMER` ou `ADMIN`.
 
 Efeito:
 
-- altera o pedido de `PENDING` para `PAID`
+- cria um `PaymentIntent` no gateway de pagamento e o vincula ao pedido
+- o pedido permanece `PENDING`; a confirmacao ocorre depois, via webhook do gateway
 
-Response `200 OK`: mesmo formato de pedido, com `status` atualizado.
+Response `200 OK`:
+
+```json
+{
+  "orderId": "92d4d090-922c-4d2c-a835-2604632bfdc5",
+  "paymentIntentId": "pi_9f8c...",
+  "clientSecret": "pi_9f8c..._secret_2a1b...",
+  "amount": 199.80,
+  "currency": "BRL"
+}
+```
 
 Possiveis respostas:
 
-- `200 OK`: pagamento confirmado
+- `200 OK`: checkout iniciado
 - `403 Forbidden`: perfil sem permissao
 - `404 Not Found`: pedido inexistente ou de outro cliente
-- `409 Conflict`: pedido nao esta `PENDING`
+- `409 Conflict`: pedido nao esta `PENDING` ou a reserva ja expirou
 
-### 14. Cancelar pedido
+### 14. Webhook de pagamento
+
+`POST /webhooks/payments`
+
+Endpoint publico, chamado pelo gateway de pagamento (nao pelo front-end). Em producao, o adaptador
+do gateway verifica a assinatura. Idempotente: reentregas do mesmo evento nao reprocessam o pedido.
+
+Request (formato do gateway `fake`):
+
+```json
+{
+  "type": "payment_intent.succeeded",
+  "paymentIntentId": "pi_9f8c..."
+}
+```
+
+Efeito (`payment_intent.succeeded`): altera o pedido de `PENDING` para `PAID`.
+
+Response `200 OK` (sempre, para eventos reconhecidos).
+
+### 15. Estornar pedido
+
+`POST /orders/{id}/refund`
+
+Requer `Authorization: Bearer <token>` com perfil `CUSTOMER` ou `ADMIN`.
+
+Efeito:
+
+- solicita o reembolso ao gateway
+- altera o pedido de `PAID` para `REFUNDED`
+- devolve os assentos ao lote e remove os ingressos do pedido
+
+Possiveis respostas:
+
+- `200 OK`: pedido estornado
+- `403 Forbidden`: perfil sem permissao
+- `404 Not Found`: pedido inexistente ou de outro cliente
+- `409 Conflict`: pedido nao esta `PAID`
+
+### 16. Cancelar pedido
 
 `POST /orders/{id}/cancel`
 
@@ -377,7 +436,7 @@ Possiveis respostas:
 - `404 Not Found`: pedido inexistente ou de outro cliente
 - `409 Conflict`: pedido nao esta `PENDING`
 
-### 15. Validar ingresso
+### 17. Validar ingresso
 
 `POST /tickets/{codeHash}/validate`
 
@@ -454,9 +513,10 @@ Exemplo de rate limit (`429 Too Many Requests` em `/auth/login`):
 4. Criar um lote com `POST /events/{eventId}/ticket-batches`.
 5. Registrar um usuario `CUSTOMER`.
 6. Fazer login como cliente.
-7. Comprar ingressos com `POST /orders`.
-8. Confirmar pagamento com `POST /orders/{id}/pay`.
-9. Validar cada ingresso na entrada com `POST /tickets/{codeHash}/validate`.
+7. Comprar ingressos com `POST /orders` (assentos retidos com prazo `expiresAt`).
+8. Iniciar o checkout com `POST /orders/{id}/checkout` e guardar o `paymentIntentId`.
+9. Confirmar o pagamento simulando o gateway: `POST /webhooks/payments` com o `paymentIntentId` (pedido vai para `PAID`).
+10. Validar cada ingresso na entrada com `POST /tickets/{codeHash}/validate`.
 
 ## cURL rapido
 

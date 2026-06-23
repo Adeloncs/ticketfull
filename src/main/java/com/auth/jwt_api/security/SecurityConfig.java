@@ -53,6 +53,7 @@ public class SecurityConfig {
                                 "/auth/register",
                                 "/auth/refresh",
                                 "/auth/logout",
+                                "/webhooks/payments",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
@@ -65,8 +66,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
                         // Apenas clientes (ou admin) compram ingressos e confirmam pagamento
                         .requestMatchers(HttpMethod.POST, "/orders").hasAnyRole("CUSTOMER", "ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/orders/*/pay").hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/orders/*/checkout").hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/orders/*/cancel").hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/orders/*/refund").hasAnyRole("CUSTOMER", "ADMIN")
                         // Validação/check-in de ingresso é ação de organizador (ou admin)
                         .requestMatchers(HttpMethod.POST, "/tickets/*/validate").hasAnyRole("ORGANIZER", "ADMIN")
                         .anyRequest().authenticated()

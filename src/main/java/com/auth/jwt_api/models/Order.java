@@ -58,6 +58,14 @@ public class Order {
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
+    /** Prazo da reserva: após este instante, um pedido PENDING pode ser expirado e os assentos liberados. */
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    /** Identificador do PaymentIntent no gateway; chave de correlação para o webhook idempotente. */
+    @Column(name = "payment_intent_id", unique = true)
+    private String paymentIntentId;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Ticket> tickets = new ArrayList<>();
@@ -78,5 +86,25 @@ public class Order {
     /** Cancela o pedido (PENDING -> CANCELLED). */
     public void markAsCancelled() {
         this.status = OrderStatus.CANCELLED;
+    }
+
+    /** Expira a reserva não paga (PENDING -> EXPIRED). */
+    public void markAsExpired() {
+        this.status = OrderStatus.EXPIRED;
+    }
+
+    /** Estorna um pedido já pago (PAID -> REFUNDED). */
+    public void markAsRefunded() {
+        this.status = OrderStatus.REFUNDED;
+    }
+
+    /** Vincula o PaymentIntent criado no gateway ao iniciar o checkout. */
+    public void assignPaymentIntent(String paymentIntentId) {
+        this.paymentIntentId = paymentIntentId;
+    }
+
+    /** Indica se o prazo da reserva já passou (independente de o job de expiração ter rodado). */
+    public boolean isExpired() {
+        return expiresAt != null && expiresAt.isBefore(Instant.now());
     }
 }

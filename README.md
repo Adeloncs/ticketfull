@@ -66,9 +66,9 @@ Papéis disponíveis no enum `UserRole`:
 
 Regras de acesso no `SecurityConfig`:
 
-- Público: `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
+- Público: `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`, `/webhooks/payments`, `/v3/api-docs/**`, `/swagger-ui/**`, `/swagger-ui.html`
 - `POST /events` e `POST /events/{eventId}/ticket-batches`: `ORGANIZER` ou `ADMIN`
-- `POST /orders` e `POST /orders/{id}/pay`: `CUSTOMER` ou `ADMIN`
+- `POST /orders`, `POST /orders/{id}/checkout`, `POST /orders/{id}/cancel` e `POST /orders/{id}/refund`: `CUSTOMER` ou `ADMIN`
 - `POST /tickets/{codeHash}/validate`: `ORGANIZER` ou `ADMIN`
 - Demais rotas: autenticadas
 
@@ -238,7 +238,10 @@ Payload de criação:
 - `POST /orders`
 - `GET /orders`
 - `GET /orders/{id}`
-- `POST /orders/{id}/pay`
+- `POST /orders/{id}/checkout` (cria PaymentIntent; pagamento confirmado via webhook)
+- `POST /orders/{id}/cancel`
+- `POST /orders/{id}/refund`
+- `POST /webhooks/payments` (callback público e idempotente do gateway)
 
 Payload de compra:
 

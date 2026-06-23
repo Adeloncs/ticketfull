@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import com.auth.jwt_api.dtos.CheckoutResponseDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.models.OrderStatus;
 import com.auth.jwt_api.models.User;
@@ -60,7 +61,7 @@ class OrderControllerTest {
     @DisplayName("POST /orders: CUSTOMER compra -> 201")
     void create_shouldReturn201_forCustomer() throws Exception {
         OrderResponseDTO dto = new OrderResponseDTO(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                OrderStatus.PENDING, new BigDecimal("200.00"), List.of(), null);
+                OrderStatus.PENDING, new BigDecimal("200.00"), null, List.of(), null);
         when(orderService.create(any(), any())).thenReturn(dto);
 
         mockMvc.perform(post("/orders").with(as(UserRole.CUSTOMER))
@@ -95,29 +96,49 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("POST /orders/{id}/pay: CUSTOMER confirma pagamento -> 200, PAID")
-    void pay_shouldReturn200_forCustomer() throws Exception {
+    @DisplayName("POST /orders/{id}/checkout: CUSTOMER inicia pagamento -> 200 com PaymentIntent")
+    void checkout_shouldReturn200_forCustomer() throws Exception {
         UUID orderId = UUID.randomUUID();
-        OrderResponseDTO dto = new OrderResponseDTO(orderId, UUID.randomUUID(), UUID.randomUUID(),
-                OrderStatus.PAID, new BigDecimal("200.00"), List.of(), null);
-        when(orderService.pay(any(), any())).thenReturn(dto);
+        CheckoutResponseDTO dto = new CheckoutResponseDTO(orderId, "pi_123", "pi_123_secret",
+                new BigDecimal("200.00"), "BRL");
+        when(orderService.checkout(any(), any())).thenReturn(dto);
 
-        mockMvc.perform(post("/orders/{id}/pay", orderId).with(as(UserRole.CUSTOMER)))
+        mockMvc.perform(post("/orders/{id}/checkout", orderId).with(as(UserRole.CUSTOMER)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("PAID"));
+                .andExpect(jsonPath("$.paymentIntentId").value("pi_123"));
     }
 
     @Test
-    @DisplayName("POST /orders/{id}/pay: ORGANIZER -> 403 (role)")
-    void pay_shouldReturn403_forOrganizer() throws Exception {
-        mockMvc.perform(post("/orders/{id}/pay", UUID.randomUUID()).with(as(UserRole.ORGANIZER)))
+    @DisplayName("POST /orders/{id}/checkout: ORGANIZER -> 403 (role)")
+    void checkout_shouldReturn403_forOrganizer() throws Exception {
+        mockMvc.perform(post("/orders/{id}/checkout", UUID.randomUUID()).with(as(UserRole.ORGANIZER)))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @DisplayName("POST /orders/{id}/pay: sem autenticação -> 401")
-    void pay_shouldReturn401_whenAnonymous() throws Exception {
-        mockMvc.perform(post("/orders/{id}/pay", UUID.randomUUID()))
+    @DisplayName("POST /orders/{id}/checkout: sem autenticação -> 401")
+    void checkout_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/orders/{id}/checkout", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/refund: CUSTOMER estorna -> 200, REFUNDED")
+    void refund_shouldReturn200_forCustomer() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        OrderResponseDTO dto = new OrderResponseDTO(orderId, UUID.randomUUID(), UUID.randomUUID(),
+                OrderStatus.REFUNDED, new BigDecimal("200.00"), null, List.of(), null);
+        when(orderService.refund(any(), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/orders/{id}/refund", orderId).with(as(UserRole.CUSTOMER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REFUNDED"));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/refund: sem autenticação -> 401")
+    void refund_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/orders/{id}/refund", UUID.randomUUID()))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -126,7 +147,7 @@ class OrderControllerTest {
     void cancel_shouldReturn200_forCustomer() throws Exception {
         UUID orderId = UUID.randomUUID();
         OrderResponseDTO dto = new OrderResponseDTO(orderId, UUID.randomUUID(), UUID.randomUUID(),
-                OrderStatus.CANCELLED, new BigDecimal("200.00"), List.of(), null);
+                OrderStatus.CANCELLED, new BigDecimal("200.00"), null, List.of(), null);
         when(orderService.cancel(any(), any())).thenReturn(dto);
 
         mockMvc.perform(post("/orders/{id}/cancel", orderId).with(as(UserRole.CUSTOMER)))

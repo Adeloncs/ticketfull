@@ -34,6 +34,11 @@
       "key": "codeHash",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "paymentIntentId",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -415,7 +420,20 @@
           "response": []
         },
         {
-          "name": "Confirmar pagamento do pedido",
+          "name": "Iniciar checkout do pedido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set('paymentIntentId', pm.response.json().paymentIntentId);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -425,11 +443,78 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/orders/{{orderId}}/pay",
+              "raw": "{{baseUrl}}/orders/{{orderId}}/checkout",
               "host": ["{{baseUrl}}"],
-              "path": ["orders", "{{orderId}}", "pay"]
+              "path": ["orders", "{{orderId}}", "checkout"]
             },
-            "description": "Confirma o pagamento de um pedido (PENDING → PAID). Requer ser o dono do pedido."
+            "description": "Inicia o pagamento criando um PaymentIntent no gateway e retorna os dados de checkout (paymentIntentId, clientSecret). O pedido permanece PENDING até a confirmação pelo webhook. O script de teste salva o paymentIntentId em {{paymentIntentId}}."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancelar pedido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{orderId}}", "cancel"]
+            },
+            "description": "Cancela um pedido PENDING (PENDING → CANCELLED), devolvendo os assentos ao lote. Requer ser o dono do pedido."
+          },
+          "response": []
+        },
+        {
+          "name": "Estornar pedido pago",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/orders/{{orderId}}/refund",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders", "{{orderId}}", "refund"]
+            },
+            "description": "Estorna um pedido já pago (PAID → REFUNDED), solicitando o reembolso ao gateway e devolvendo os assentos. Requer ser o dono do pedido."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Confirmar pagamento (webhook do gateway)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"payment_intent.succeeded\",\n  \"paymentIntentId\": \"{{paymentIntentId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/payments",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "payments"]
+            },
+            "description": "Simula o callback do gateway de pagamento confirmando o pedido (PENDING → PAID). Endpoint público e idempotente. Use após 'Iniciar checkout do pedido' (que preenche {{paymentIntentId}})."
           },
           "response": []
         }

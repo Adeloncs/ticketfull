@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.auth.jwt_api.dtos.CheckoutResponseDTO;
 import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.models.User;
@@ -54,11 +55,11 @@ public class OrderController {
         return ResponseEntity.ok(orderService.findMyOrder(id, customer.getId()));
     }
 
-    @PostMapping("/{id}/pay")
-    @Operation(summary = "Confirmar pagamento do pedido (cliente dono) — PENDING -> PAID")
-    public ResponseEntity<OrderResponseDTO> pay(@PathVariable UUID id,
-                                                @AuthenticationPrincipal User customer) {
-        return ResponseEntity.ok(orderService.pay(id, customer));
+    @PostMapping("/{id}/checkout")
+    @Operation(summary = "Iniciar pagamento do pedido (cliente dono) — cria PaymentIntent; pagamento é confirmado via webhook")
+    public ResponseEntity<CheckoutResponseDTO> checkout(@PathVariable UUID id,
+                                                        @AuthenticationPrincipal User customer) {
+        return ResponseEntity.ok(orderService.checkout(id, customer));
     }
 
     @PostMapping("/{id}/cancel")
@@ -66,5 +67,12 @@ public class OrderController {
     public ResponseEntity<OrderResponseDTO> cancel(@PathVariable UUID id,
                                                    @AuthenticationPrincipal User customer) {
         return ResponseEntity.ok(orderService.cancel(id, customer));
+    }
+
+    @PostMapping("/{id}/refund")
+    @Operation(summary = "Estornar pedido pago (cliente dono) — PAID -> REFUNDED, devolve assentos")
+    public ResponseEntity<OrderResponseDTO> refund(@PathVariable UUID id,
+                                                   @AuthenticationPrincipal User customer) {
+        return ResponseEntity.ok(orderService.refund(id, customer));
     }
 }
