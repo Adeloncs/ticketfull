@@ -69,4 +69,9 @@ public class Order {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** Confirma o pagamento do pedido (PENDING -> PAID). */
+    public void markAsPaid() {
+        this.status = OrderStatus.PAID;
+    }
 }

@@ -53,4 +53,11 @@ public class OrderController {
                                                     @AuthenticationPrincipal User customer) {
         return ResponseEntity.ok(orderService.findMyOrder(id, customer.getId()));
     }
+
+    @PostMapping("/{id}/pay")
+    @Operation(summary = "Confirmar pagamento do pedido (cliente dono) — PENDING -> PAID")
+    public ResponseEntity<OrderResponseDTO> pay(@PathVariable UUID id,
+                                                @AuthenticationPrincipal User customer) {
+        return ResponseEntity.ok(orderService.pay(id, customer));
+    }
 }

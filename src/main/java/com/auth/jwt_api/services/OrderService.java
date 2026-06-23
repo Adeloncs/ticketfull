@@ -15,6 +15,7 @@ import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
+import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
 import com.auth.jwt_api.models.Order;
 import com.auth.jwt_api.models.OrderStatus;
@@ -82,6 +83,23 @@ public class OrderService {
         return orderRepository.findByIdAndCustomerId(id, customerId)
                 .map(OrderResponseDTO::from)
                 .orElseThrow(() -> new OrderNotFoundException(id));
+    }
+
+    /**
+     * Confirma o pagamento (simulado) de um pedido PENDING do próprio cliente.
+     * O lock pessimista impede que duas confirmações concorrentes processem o mesmo pedido.
+     */
+    @Transactional
+    public OrderResponseDTO pay(UUID id, User customer) {
+        Order order = orderRepository.findByIdAndCustomerIdForUpdate(id, customer.getId())
+                .orElseThrow(() -> new OrderNotFoundException(id));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new OrderNotPayableException(id, order.getStatus());
+        }
+
+        order.markAsPaid();
+        return OrderResponseDTO.from(order);
     }
 
     /** Hash único que simula o QR Code do ingresso (SHA-256 de um UUID aleatório). */

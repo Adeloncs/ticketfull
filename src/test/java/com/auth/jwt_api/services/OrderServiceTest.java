@@ -22,6 +22,7 @@ import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
+import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
 import com.auth.jwt_api.models.Event;
 import com.auth.jwt_api.models.Order;
@@ -117,5 +118,51 @@ class OrderServiceTest {
         when(orderRepository.findByIdAndCustomerId(orderId, customerId)).thenReturn(Optional.empty());
 
         assertThrows(OrderNotFoundException.class, () -> orderService.findMyOrder(orderId, customerId));
+    }
+
+    private Order pendingOrder(User customer, OrderStatus status) {
+        return Order.builder()
+                .id(UUID.randomUUID())
+                .customer(customer)
+                .event(Event.builder().id(UUID.randomUUID()).build())
+                .status(status)
+                .totalAmount(new BigDecimal("100.00"))
+                .build();
+    }
+
+    @Test
+    @DisplayName("pay: confirma pagamento de pedido PENDING do próprio cliente (-> PAID)")
+    void pay_shouldMarkPaid() {
+        User customer = customer();
+        Order order = pendingOrder(customer, OrderStatus.PENDING);
+        when(orderRepository.findByIdAndCustomerIdForUpdate(order.getId(), customer.getId()))
+                .thenReturn(Optional.of(order));
+
+        OrderResponseDTO result = orderService.pay(order.getId(), customer);
+
+        assertThat(result.status()).isEqualTo(OrderStatus.PAID);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("pay: lança OrderNotFoundException quando o pedido não é do cliente/não existe")
+    void pay_shouldThrow_whenMissing() {
+        User customer = customer();
+        UUID id = UUID.randomUUID();
+        when(orderRepository.findByIdAndCustomerIdForUpdate(id, customer.getId())).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class, () -> orderService.pay(id, customer));
+    }
+
+    @Test
+    @DisplayName("pay: lança OrderNotPayableException quando o pedido não está PENDING")
+    void pay_shouldThrow_whenNotPending() {
+        User customer = customer();
+        Order order = pendingOrder(customer, OrderStatus.PAID);
+        when(orderRepository.findByIdAndCustomerIdForUpdate(order.getId(), customer.getId()))
+                .thenReturn(Optional.of(order));
+
+        assertThrows(OrderNotPayableException.class, () -> orderService.pay(order.getId(), customer));
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID); // permanece PAID, sem reprocessar
     }
 }

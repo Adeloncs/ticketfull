@@ -93,4 +93,31 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(invalid))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("POST /orders/{id}/pay: CUSTOMER confirma pagamento -> 200, PAID")
+    void pay_shouldReturn200_forCustomer() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        OrderResponseDTO dto = new OrderResponseDTO(orderId, UUID.randomUUID(), UUID.randomUUID(),
+                OrderStatus.PAID, new BigDecimal("200.00"), List.of(), null);
+        when(orderService.pay(any(), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/orders/{id}/pay", orderId).with(as(UserRole.CUSTOMER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/pay: ORGANIZER -> 403 (role)")
+    void pay_shouldReturn403_forOrganizer() throws Exception {
+        mockMvc.perform(post("/orders/{id}/pay", UUID.randomUUID()).with(as(UserRole.ORGANIZER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/pay: sem autenticação -> 401")
+    void pay_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/orders/{id}/pay", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
+    }
 }
