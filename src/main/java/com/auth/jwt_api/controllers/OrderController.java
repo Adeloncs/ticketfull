@@ -60,4 +60,11 @@ public class OrderController {
                                                 @AuthenticationPrincipal User customer) {
         return ResponseEntity.ok(orderService.pay(id, customer));
     }
+
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancelar pedido (cliente dono) — PENDING -> CANCELLED, devolve assentos")
+    public ResponseEntity<OrderResponseDTO> cancel(@PathVariable UUID id,
+                                                   @AuthenticationPrincipal User customer) {
+        return ResponseEntity.ok(orderService.cancel(id, customer));
+    }
 }

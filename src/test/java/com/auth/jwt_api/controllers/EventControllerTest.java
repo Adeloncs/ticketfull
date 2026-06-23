@@ -10,8 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.domain.Page;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -99,11 +100,11 @@ class EventControllerTest {
     }
 
     @Test
-    @DisplayName("GET /events: usuário autenticado lista eventos -> 200")
-    void list_shouldReturn200_forAuthenticatedUser() throws Exception {
-        when(eventService.findAll()).thenReturn(List.of());
+    @DisplayName("GET /events: público (sem autenticação), paginado -> 200")
+    void list_shouldReturn200_public() throws Exception {
+        when(eventService.search(any(), any(), any(), any())).thenReturn(Page.empty());
 
-        mockMvc.perform(get("/events").with(as(UserRole.CUSTOMER)))
+        mockMvc.perform(get("/events"))
                 .andExpect(status().isOk());
     }
 }

@@ -120,4 +120,31 @@ class OrderControllerTest {
         mockMvc.perform(post("/orders/{id}/pay", UUID.randomUUID()))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("POST /orders/{id}/cancel: CUSTOMER cancela -> 200, CANCELLED")
+    void cancel_shouldReturn200_forCustomer() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        OrderResponseDTO dto = new OrderResponseDTO(orderId, UUID.randomUUID(), UUID.randomUUID(),
+                OrderStatus.CANCELLED, new BigDecimal("200.00"), List.of(), null);
+        when(orderService.cancel(any(), any())).thenReturn(dto);
+
+        mockMvc.perform(post("/orders/{id}/cancel", orderId).with(as(UserRole.CUSTOMER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/cancel: ORGANIZER -> 403 (role)")
+    void cancel_shouldReturn403_forOrganizer() throws Exception {
+        mockMvc.perform(post("/orders/{id}/cancel", UUID.randomUUID()).with(as(UserRole.ORGANIZER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /orders/{id}/cancel: sem autenticação -> 401")
+    void cancel_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/orders/{id}/cancel", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
+    }
 }

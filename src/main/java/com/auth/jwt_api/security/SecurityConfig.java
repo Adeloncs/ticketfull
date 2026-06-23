@@ -57,12 +57,16 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Navegação de eventos e lotes é pública (clientes visualizam sem login)
+                        .requestMatchers(HttpMethod.GET, "/events", "/events/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/events/*/ticket-batches").permitAll()
                         // Apenas organizadores (ou admin) criam eventos e definem lotes
                         .requestMatchers(HttpMethod.POST, "/events").hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
                         // Apenas clientes (ou admin) compram ingressos e confirmam pagamento
                         .requestMatchers(HttpMethod.POST, "/orders").hasAnyRole("CUSTOMER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/orders/*/pay").hasAnyRole("CUSTOMER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/orders/*/cancel").hasAnyRole("CUSTOMER", "ADMIN")
                         // Validação/check-in de ingresso é ação de organizador (ou admin)
                         .requestMatchers(HttpMethod.POST, "/tickets/*/validate").hasAnyRole("ORGANIZER", "ADMIN")
                         .anyRequest().authenticated()

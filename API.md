@@ -39,7 +39,9 @@ Regras de acesso:
 - `POST /events/{eventId}/ticket-batches`: `ORGANIZER` ou `ADMIN`
 - `POST /orders`: `CUSTOMER` ou `ADMIN`
 - `POST /orders/{id}/pay`: `CUSTOMER` ou `ADMIN`
+- `POST /orders/{id}/cancel`: `CUSTOMER` ou `ADMIN`
 - `POST /tickets/{codeHash}/validate`: `ORGANIZER` ou `ADMIN`
+- `GET /events`, `GET /events/{id}`, `GET /events/{eventId}/ticket-batches`: publicas (sem autenticacao)
 - Demais rotas fora de `/auth` exigem autenticacao
 
 ## Endpoints
@@ -169,30 +171,47 @@ Response `201 Created`:
 
 `GET /events`
 
-Requer autenticacao.
+Publico (sem autenticacao). Paginado, com filtros opcionais.
 
-Response `200 OK`:
+Query params:
+
+- `location` (opcional): filtra por local (contem, sem distincao de caixa)
+- `from` (opcional): data/hora minima do evento, ISO-8601 (ex: `2026-01-01T00:00:00Z`)
+- `to` (opcional): data/hora maxima do evento, ISO-8601
+- `page` (default `0`), `size` (default `20`), `sort` (ex: `eventDate,asc`)
+
+Exemplo: `GET /events?location=sao%20paulo&from=2026-01-01T00:00:00Z&page=0&size=10&sort=eventDate,asc`
+
+Response `200 OK` (estrutura paginada `PagedModel`):
 
 ```json
-[
-  {
-    "id": "8bd8d0b3-e0d7-47b0-bb0f-5a9900fa9772",
-    "title": "Tech Conference 2026",
-    "description": "Evento anual de tecnologia",
-    "eventDate": "2026-09-10T19:30:00Z",
-    "location": "Sao Paulo - SP",
-    "organizerId": "7b5f9df6-00f0-4dfa-8d45-2a5fe59076f1",
-    "createdAt": "2026-06-23T12:00:00Z",
-    "updatedAt": "2026-06-23T12:00:00Z"
+{
+  "content": [
+    {
+      "id": "8bd8d0b3-e0d7-47b0-bb0f-5a9900fa9772",
+      "title": "Tech Conference 2026",
+      "description": "Evento anual de tecnologia",
+      "eventDate": "2026-09-10T19:30:00Z",
+      "location": "Sao Paulo - SP",
+      "organizerId": "7b5f9df6-00f0-4dfa-8d45-2a5fe59076f1",
+      "createdAt": "2026-06-23T12:00:00Z",
+      "updatedAt": "2026-06-23T12:00:00Z"
+    }
+  ],
+  "page": {
+    "size": 10,
+    "number": 0,
+    "totalElements": 1,
+    "totalPages": 1
   }
-]
+}
 ```
 
 ### 7. Buscar evento por ID
 
 `GET /events/{id}`
 
-Requer autenticacao.
+Publico (sem autenticacao).
 
 Response `200 OK`: mesmo formato de evento.
 
@@ -235,7 +254,7 @@ Response `201 Created`:
 
 `GET /events/{eventId}/ticket-batches`
 
-Requer autenticacao.
+Publico (sem autenticacao).
 
 Response `200 OK`:
 
@@ -333,7 +352,32 @@ Efeito:
 
 Response `200 OK`: mesmo formato de pedido, com `status` atualizado.
 
-### 14. Validar ingresso
+Possiveis respostas:
+
+- `200 OK`: pagamento confirmado
+- `403 Forbidden`: perfil sem permissao
+- `404 Not Found`: pedido inexistente ou de outro cliente
+- `409 Conflict`: pedido nao esta `PENDING`
+
+### 14. Cancelar pedido
+
+`POST /orders/{id}/cancel`
+
+Requer `Authorization: Bearer <token>` com perfil `CUSTOMER` ou `ADMIN`.
+
+Efeito:
+
+- altera o pedido de `PENDING` para `CANCELLED`
+- devolve os assentos ao lote e remove os ingressos do pedido
+
+Possiveis respostas:
+
+- `200 OK`: pedido cancelado (mesmo formato de pedido, com `tickets` vazio)
+- `403 Forbidden`: perfil sem permissao
+- `404 Not Found`: pedido inexistente ou de outro cliente
+- `409 Conflict`: pedido nao esta `PENDING`
+
+### 15. Validar ingresso
 
 `POST /tickets/{codeHash}/validate`
 

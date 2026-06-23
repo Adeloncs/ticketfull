@@ -74,4 +74,9 @@ public class Order {
     public void markAsPaid() {
         this.status = OrderStatus.PAID;
     }
+
+    /** Cancela o pedido (PENDING -> CANCELLED). */
+    public void markAsCancelled() {
+        this.status = OrderStatus.CANCELLED;
+    }
 }

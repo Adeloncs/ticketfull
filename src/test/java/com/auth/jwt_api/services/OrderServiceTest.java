@@ -21,13 +21,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
+import com.auth.jwt_api.exceptions.OrderNotCancellableException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
 import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
 import com.auth.jwt_api.models.Event;
 import com.auth.jwt_api.models.Order;
 import com.auth.jwt_api.models.OrderStatus;
+import com.auth.jwt_api.models.Ticket;
 import com.auth.jwt_api.models.TicketBatch;
+import com.auth.jwt_api.models.TicketStatus;
 import com.auth.jwt_api.models.User;
 import com.auth.jwt_api.models.UserRole;
 import com.auth.jwt_api.repositories.OrderRepository;
@@ -164,5 +167,79 @@ class OrderServiceTest {
 
         assertThrows(OrderNotPayableException.class, () -> orderService.pay(order.getId(), customer));
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID); // permanece PAID, sem reprocessar
+    }
+
+    private TicketBatch batchWithSeats(int available, int total) {
+        Event event = Event.builder().id(UUID.randomUUID()).title("E").location("L").build();
+        return TicketBatch.builder()
+                .id(UUID.randomUUID())
+                .event(event)
+                .name("Pista")
+                .price(new BigDecimal("50.00"))
+                .totalCapacity(total)
+                .availableSeats(available)
+                .build();
+    }
+
+    private Order orderWithTickets(User customer, OrderStatus status, TicketBatch batch, int qty) {
+        Order order = Order.builder()
+                .id(UUID.randomUUID())
+                .customer(customer)
+                .event(Event.builder().id(UUID.randomUUID()).build())
+                .status(status)
+                .totalAmount(new BigDecimal("100.00"))
+                .build();
+        for (int i = 0; i < qty; i++) {
+            order.getTickets().add(Ticket.builder()
+                    .id(UUID.randomUUID())
+                    .ticketBatch(batch)
+                    .codeHash("hash-" + i)
+                    .status(TicketStatus.VALID)
+                    .build());
+        }
+        return order;
+    }
+
+    @Test
+    @DisplayName("cancel: cancela pedido PENDING, devolve assentos ao lote e remove ingressos")
+    void cancel_shouldRestoreSeatsAndClearTickets() {
+        User customer = customer();
+        TicketBatch batch = batchWithSeats(8, 10); // 2 vendidos de 10
+        Order order = orderWithTickets(customer, OrderStatus.PENDING, batch, 2);
+
+        when(orderRepository.findByIdAndCustomerIdForUpdate(order.getId(), customer.getId()))
+                .thenReturn(Optional.of(order));
+        when(ticketBatchRepository.findByIdForUpdate(batch.getId())).thenReturn(Optional.of(batch));
+
+        OrderResponseDTO result = orderService.cancel(order.getId(), customer);
+
+        assertThat(result.status()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(batch.getAvailableSeats()).isEqualTo(10); // 8 + 2 devolvidos
+        assertThat(order.getTickets()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("cancel: lança OrderNotCancellableException quando o pedido não está PENDING")
+    void cancel_shouldThrow_whenNotPending() {
+        User customer = customer();
+        TicketBatch batch = batchWithSeats(8, 10);
+        Order order = orderWithTickets(customer, OrderStatus.PAID, batch, 2);
+
+        when(orderRepository.findByIdAndCustomerIdForUpdate(order.getId(), customer.getId()))
+                .thenReturn(Optional.of(order));
+
+        assertThrows(OrderNotCancellableException.class, () -> orderService.cancel(order.getId(), customer));
+        assertThat(batch.getAvailableSeats()).isEqualTo(8); // inalterado
+        verify(ticketBatchRepository, never()).findByIdForUpdate(batch.getId());
+    }
+
+    @Test
+    @DisplayName("cancel: lança OrderNotFoundException quando o pedido não é do cliente/não existe")
+    void cancel_shouldThrow_whenMissing() {
+        User customer = customer();
+        UUID id = UUID.randomUUID();
+        when(orderRepository.findByIdAndCustomerIdForUpdate(id, customer.getId())).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class, () -> orderService.cancel(id, customer));
     }
 }

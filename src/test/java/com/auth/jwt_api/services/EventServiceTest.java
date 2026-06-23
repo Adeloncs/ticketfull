@@ -16,6 +16,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.auth.jwt_api.dtos.EventRequestDTO;
 import com.auth.jwt_api.dtos.EventResponseDTO;
@@ -69,8 +74,8 @@ class EventServiceTest {
     }
 
     @Test
-    @DisplayName("findAll: mapeia todos os eventos para DTO")
-    void findAll_shouldMapAll() {
+    @DisplayName("search: aplica filtros/paginação e mapeia a página para DTO")
+    void search_shouldMapPage() {
         User organizer = organizer();
         Event event = Event.builder()
                 .id(UUID.randomUUID())
@@ -80,12 +85,13 @@ class EventServiceTest {
                 .organizer(organizer)
                 .build();
 
-        when(eventRepository.findAll()).thenReturn(List.of(event));
+        when(eventRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(event)));
 
-        List<EventResponseDTO> result = eventService.findAll();
+        Page<EventResponseDTO> result = eventService.search("L1", null, null, PageRequest.of(0, 10));
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).title()).isEqualTo("E1");
-        assertThat(result.get(0).organizerId()).isEqualTo(organizer.getId());
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("E1");
+        assertThat(result.getContent().get(0).organizerId()).isEqualTo(organizer.getId());
     }
 }

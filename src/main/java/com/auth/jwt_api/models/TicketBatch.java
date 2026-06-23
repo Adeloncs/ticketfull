@@ -74,4 +74,9 @@ public class TicketBatch {
     public void decreaseAvailableSeats(int quantity) {
         this.availableSeats -= quantity;
     }
+
+    /** Devolve assentos ao lote (ex.: cancelamento de pedido). */
+    public void increaseAvailableSeats(int quantity) {
+        this.availableSeats += quantity;
+    }
 }

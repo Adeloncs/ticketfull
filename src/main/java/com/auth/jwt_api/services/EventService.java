@@ -1,10 +1,17 @@
 package com.auth.jwt_api.services;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import jakarta.persistence.criteria.Predicate;
 
 import com.auth.jwt_api.dtos.EventRequestDTO;
 import com.auth.jwt_api.dtos.EventResponseDTO;
@@ -36,10 +43,21 @@ public class EventService {
     }
 
     @Transactional(readOnly = true)
-    public List<EventResponseDTO> findAll() {
-        return eventRepository.findAll().stream()
-                .map(EventResponseDTO::from)
-                .toList();
+    public Page<EventResponseDTO> search(String location, Instant from, Instant to, Pageable pageable) {
+        Specification<Event> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (location != null && !location.isBlank()) {
+                predicates.add(cb.like(cb.lower(root.get("location")), "%" + location.toLowerCase() + "%"));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("eventDate"), from));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("eventDate"), to));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        return eventRepository.findAll(spec, pageable).map(EventResponseDTO::from);
     }
 
     @Transactional(readOnly = true)

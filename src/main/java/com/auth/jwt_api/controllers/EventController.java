@@ -1,9 +1,14 @@
 package com.auth.jwt_api.controllers;
 
 import java.net.URI;
-import java.util.List;
+import java.time.Instant;
 import java.util.UUID;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PagedModel;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.auth.jwt_api.dtos.EventRequestDTO;
@@ -42,9 +48,16 @@ public class EventController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar eventos")
-    public ResponseEntity<List<EventResponseDTO>> list() {
-        return ResponseEntity.ok(eventService.findAll());
+    @Operation(summary = "Listar eventos (público, paginado, filtros opcionais por local e data)")
+    public ResponseEntity<PagedModel<EventResponseDTO>> list(
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @ParameterObject Pageable pageable) {
+        Page<EventResponseDTO> page = eventService.search(location, from, to, pageable);
+        return ResponseEntity.ok(new PagedModel<>(page));
     }
 
     @GetMapping("/{id}")

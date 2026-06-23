@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
+import com.auth.jwt_api.exceptions.OrderNotCancellableException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
 import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
@@ -99,6 +100,32 @@ public class OrderService {
         }
 
         order.markAsPaid();
+        return OrderResponseDTO.from(order);
+    }
+
+    /**
+     * Cancela um pedido PENDING do próprio cliente, devolvendo os assentos ao lote.
+     * Os ingressos do pedido são removidos (orphanRemoval).
+     */
+    @Transactional
+    public OrderResponseDTO cancel(UUID id, User customer) {
+        Order order = orderRepository.findByIdAndCustomerIdForUpdate(id, customer.getId())
+                .orElseThrow(() -> new OrderNotFoundException(id));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new OrderNotCancellableException(id, order.getStatus());
+        }
+
+        if (!order.getTickets().isEmpty()) {
+            UUID batchId = order.getTickets().get(0).getTicketBatch().getId();
+            int quantity = order.getTickets().size();
+            TicketBatch batch = ticketBatchRepository.findByIdForUpdate(batchId)
+                    .orElseThrow(() -> new TicketBatchNotFoundException(batchId));
+            batch.increaseAvailableSeats(quantity);
+            order.getTickets().clear();
+        }
+
+        order.markAsCancelled();
         return OrderResponseDTO.from(order);
     }
 
