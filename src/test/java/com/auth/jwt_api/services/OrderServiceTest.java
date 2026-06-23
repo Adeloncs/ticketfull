@@ -42,6 +42,8 @@ import com.auth.jwt_api.payments.PaymentIntent;
 import com.auth.jwt_api.repositories.OrderRepository;
 import com.auth.jwt_api.repositories.TicketBatchRepository;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
@@ -58,7 +60,8 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, ticketBatchRepository, paymentGateway, 15);
+        orderService = new OrderService(orderRepository, ticketBatchRepository, paymentGateway,
+                new SimpleMeterRegistry(), 15);
     }
 
     private User customer() {

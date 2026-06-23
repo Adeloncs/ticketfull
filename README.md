@@ -36,10 +36,13 @@ Além do módulo de autenticação, o projeto já inclui o domínio de eventos:
 | Flyway | gerenciado pelo Spring Boot |
 | PostgreSQL | 16 (docker-compose) |
 | H2 Database (testes) | gerenciado pelo Spring Boot |
+| Testcontainers (testes de integração) | gerenciado pelo Spring Boot |
+| Actuator + Micrometer/Prometheus | gerenciado pelo Spring Boot |
 | JJWT | 0.12.6 |
 | Bucket4j | 8.10.1 |
 | Springdoc OpenAPI | 3.0.3 |
 | Lombok | 1.18.38 |
+| JaCoCo | 0.8.13 |
 | Maven Wrapper | incluído no repositório |
 
 ## Funcionalidades
@@ -304,7 +307,8 @@ Status comuns:
 
 ## Testes
 
-Os testes usam H2 em memória (`src/test/resources/application-test.properties`) e desabilitam Flyway no perfil de teste.
+- **Testes unitários e de slice** usam H2 em memória (`src/test/resources/application-test.properties`), com Flyway desabilitado no perfil `test`.
+- **Teste de integração ponta-a-ponta** (`OrderFlowIntegrationTest`) sobe um **PostgreSQL real via Testcontainers** (requer Docker), roda as migrações Flyway V1–V3, valida o mapeamento JPA (`ddl-auto=validate`) e exercita os locks pessimistas e todo o ciclo de vida do pedido.
 
 Executar testes:
 
@@ -312,11 +316,34 @@ Executar testes:
 ./mvnw test
 ```
 
-Executar suíte de verificação:
+Executar a verificação completa (testes + relatório e gate de cobertura JaCoCo em `target/site/jacoco/`):
 
 ```bash
 ./mvnw verify
 ```
+
+## Observabilidade
+
+Com a aplicação em execução, o Actuator expõe:
+
+- `GET /actuator/health` — health check (com liveness/readiness probes)
+- `GET /actuator/info` — metadados da aplicação
+- `GET /actuator/prometheus` — métricas no formato Prometheus
+- `GET /actuator/metrics` — métricas via API do Actuator
+
+Métricas de negócio customizadas (Micrometer):
+
+- `ticketfull_tickets_sold_total` — ingressos vendidos
+- `ticketfull_orders_total{status=PENDING|PAID|CANCELLED|EXPIRED|REFUNDED}` — transições de pedido
+
+O `docker-compose.yml` sobe **Prometheus** (http://localhost:9090) e **Grafana** (http://localhost:3000, datasource já provisionado) para visualizar as métricas. Cada requisição recebe um `X-Correlation-Id` (gerado ou reaproveitado do header), propagado para os logs via MDC.
+
+## CI/CD
+
+`.github/workflows/ci.yml` (GitHub Actions):
+
+- **build**: `./mvnw verify` (testes + Testcontainers + gate de cobertura) em JDK 25, com upload do relatório JaCoCo como artefato.
+- **docker**: em push na `main`, faz build da imagem e publica em `ghcr.io` (autenticação via `GITHUB_TOKEN`).
 
 ## Swagger / OpenAPI
 
@@ -332,7 +359,8 @@ Para endpoints protegidos, use o botão Authorize e informe o access token.
 Arquivos do projeto:
 
 - `Dockerfile`: build multi-stage (Maven + JRE 25)
-- `docker-compose.yml`: sobe API + PostgreSQL 16
+- `docker-compose.yml`: sobe API + PostgreSQL 16 + Prometheus + Grafana
+- `monitoring/`: configuração do Prometheus e provisionamento do datasource do Grafana
 
 Comando:
 

@@ -35,22 +35,34 @@ import com.auth.jwt_api.payments.PaymentIntent;
 import com.auth.jwt_api.repositories.OrderRepository;
 import com.auth.jwt_api.repositories.TicketBatchRepository;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 @Service
 public class OrderService {
+
+    /** Nome da métrica de transições de pedido; o status vai como tag (PAID, EXPIRED, ...). */
+    private static final String ORDERS_METRIC = "ticketfull.orders";
 
     private final OrderRepository orderRepository;
     private final TicketBatchRepository ticketBatchRepository;
     private final PaymentGateway paymentGateway;
+    private final MeterRegistry meterRegistry;
     private final Duration reservationDuration;
 
     public OrderService(OrderRepository orderRepository,
                         TicketBatchRepository ticketBatchRepository,
                         PaymentGateway paymentGateway,
+                        MeterRegistry meterRegistry,
                         @Value("${app.order.reservation-minutes:15}") long reservationMinutes) {
         this.orderRepository = orderRepository;
         this.ticketBatchRepository = ticketBatchRepository;
         this.paymentGateway = paymentGateway;
+        this.meterRegistry = meterRegistry;
         this.reservationDuration = Duration.ofMinutes(reservationMinutes);
+    }
+
+    private void countTransition(OrderStatus status) {
+        meterRegistry.counter(ORDERS_METRIC, "status", status.name()).increment();
     }
 
     @Transactional
@@ -85,7 +97,10 @@ public class OrderService {
         }
 
         // cascade ALL em Order.tickets persiste os ingressos junto com o pedido
-        return OrderResponseDTO.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+        meterRegistry.counter("ticketfull.tickets.sold").increment(quantity);
+        countTransition(OrderStatus.PENDING);
+        return OrderResponseDTO.from(saved);
     }
 
     @Transactional(readOnly = true)
@@ -144,6 +159,7 @@ public class OrderService {
         }
 
         order.markAsPaid();
+        countTransition(OrderStatus.PAID);
     }
 
     /**
@@ -161,6 +177,7 @@ public class OrderService {
 
         releaseSeats(order);
         order.markAsCancelled();
+        countTransition(OrderStatus.CANCELLED);
         return OrderResponseDTO.from(order);
     }
 
@@ -182,6 +199,7 @@ public class OrderService {
         }
         releaseSeats(order);
         order.markAsRefunded();
+        countTransition(OrderStatus.REFUNDED);
         return OrderResponseDTO.from(order);
     }
 
@@ -203,6 +221,7 @@ public class OrderService {
         }
         releaseSeats(order);
         order.markAsExpired();
+        countTransition(OrderStatus.EXPIRED);
     }
 
     /**

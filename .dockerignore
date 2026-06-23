@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+.idea/
+.vscode/
+*.iml
+monitoring/
+HELP.md
+*.md
+ticketfull.postman_collection.json
