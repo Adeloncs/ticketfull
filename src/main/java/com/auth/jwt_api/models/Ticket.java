@@ -55,4 +55,9 @@ public class Ticket {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    /** Marca o ingresso como utilizado (check-in na portaria). */
+    public void markAsUsed() {
+        this.status = TicketStatus.USED;
+    }
 }

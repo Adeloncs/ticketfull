@@ -62,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
                         // Apenas clientes (ou admin) compram ingressos
                         .requestMatchers(HttpMethod.POST, "/orders").hasAnyRole("CUSTOMER", "ADMIN")
+                        // Validação/check-in de ingresso é ação de organizador (ou admin)
+                        .requestMatchers(HttpMethod.POST, "/tickets/*/validate").hasAnyRole("ORGANIZER", "ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
