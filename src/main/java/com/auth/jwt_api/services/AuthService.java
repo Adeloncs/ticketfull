@@ -13,6 +13,7 @@ import com.auth.jwt_api.dtos.RegisterRequestDTO;
 import com.auth.jwt_api.exceptions.InvalidCredentialsException;
 import com.auth.jwt_api.exceptions.UserAlreadyExistsException;
 import com.auth.jwt_api.models.User;
+import com.auth.jwt_api.models.UserRole;
 import com.auth.jwt_api.repositories.UserRepository;
 import com.auth.jwt_api.security.TokenService;
 
@@ -27,6 +28,7 @@ public class AuthService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenService refreshTokenService;
+    private final TokenBlacklistService tokenBlacklistService;
 
     @Value("${api.security.token.expiration}")
     private long accessTokenExpirationMs;
@@ -35,12 +37,14 @@ public class AuthService {
                        UserRepository userRepository,
                        TokenService tokenService,
                        PasswordEncoder passwordEncoder,
-                       RefreshTokenService refreshTokenService) {
+                       RefreshTokenService refreshTokenService,
+                       TokenBlacklistService tokenBlacklistService) {
         this.authenticationManager = authenticationManager;
         this.userRepository = userRepository;
         this.tokenService = tokenService;
         this.passwordEncoder = passwordEncoder;
         this.refreshTokenService = refreshTokenService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     public LoginResult login(AuthenticationRequestDTO request) {
@@ -58,18 +62,23 @@ public class AuthService {
         }
     }
 
+    /** Auto-registro público: cria sempre um CUSTOMER (papéis privilegiados são provisionados por um ADMIN). */
     @Transactional
     public void register(RegisterRequestDTO request) {
-        if (userRepository.findByEmail(request.email()).isPresent()) {
+        createUser(request.email(), request.password(), UserRole.CUSTOMER);
+    }
+
+    /** Criação de usuário com papel explícito — uso restrito a operações administrativas. */
+    @Transactional
+    public void createUser(String email, String rawPassword, UserRole role) {
+        if (userRepository.findByEmail(email).isPresent()) {
             throw new UserAlreadyExistsException();
         }
 
-        String encryptedPassword = passwordEncoder.encode(request.password());
-
         User newUser = User.builder()
-                .email(request.email())
-                .password(encryptedPassword)
-                .role(request.role())
+                .email(email)
+                .password(passwordEncoder.encode(rawPassword))
+                .role(role)
                 .build();
 
         userRepository.save(newUser);
@@ -77,5 +86,17 @@ public class AuthService {
 
     public LoginResult refreshToken(String refreshToken) {
         return refreshTokenService.rotateRefreshToken(refreshToken, accessTokenExpirationMs / 1000);
+    }
+
+    /** Encerra a sessão: revoga o access token (lista de bloqueio) e remove o refresh token. */
+    @Transactional
+    public void logout(String accessToken, String refreshToken) {
+        if (accessToken != null) {
+            String jti = tokenService.extractTokenId(accessToken);
+            tokenBlacklistService.revoke(jti, tokenService.extractExpiration(accessToken));
+        }
+        if (refreshToken != null) {
+            refreshTokenService.deleteByToken(refreshToken);
+        }
     }
 }

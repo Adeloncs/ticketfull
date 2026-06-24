@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,7 +17,6 @@ import com.auth.jwt_api.dtos.LoginResponseDTO;
 import com.auth.jwt_api.dtos.RegisterRequestDTO;
 import com.auth.jwt_api.services.AuthService;
 import com.auth.jwt_api.services.AuthService.LoginResult;
-import com.auth.jwt_api.services.RefreshTokenService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -33,14 +33,12 @@ public class AuthController {
     private static final String COOKIE_PATH = "/auth";
 
     private final AuthService authService;
-    private final RefreshTokenService refreshTokenService;
 
     @Value("${api.security.token.refresh-expiration}")
     private long refreshExpirationMs;
 
-    public AuthController(AuthService authService, RefreshTokenService refreshTokenService) {
+    public AuthController(AuthService authService) {
         this.authService = authService;
-        this.refreshTokenService = refreshTokenService;
     }
 
     @PostMapping("/login")
@@ -76,14 +74,15 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    @Operation(summary = "Encerrar sessão e invalidar refresh token", security = @SecurityRequirement(name = ""))
+    @Operation(summary = "Encerrar sessão: revoga o access token e invalida o refresh token")
     public ResponseEntity<Void> logout(
             @CookieValue(name = REFRESH_TOKEN_COOKIE, required = false) String refreshToken,
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
             HttpServletResponse response) {
-        if (refreshToken != null) {
-            refreshTokenService.deleteByToken(refreshToken);
-        }
+        String accessToken = (authHeader != null && authHeader.startsWith("Bearer "))
+                ? authHeader.substring(7) : null;
 
+        authService.logout(accessToken, refreshToken);
         clearRefreshTokenCookie(response);
 
         return ResponseEntity.noContent().build();

@@ -2,6 +2,8 @@ package com.auth.jwt_api.services;
 
 import java.util.Optional;
 
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +11,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import static org.mockito.Mockito.verify;
@@ -49,6 +52,9 @@ class AuthServiceTest {
     @Mock
     private RefreshTokenService refreshTokenService;
 
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -62,9 +68,9 @@ class AuthServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
-    @DisplayName("register: deve codificar a password e guardar o utilizador")
-    void register_shouldEncodePasswordAndSaveUser() {
-        RegisterRequestDTO request = new RegisterRequestDTO("new@example.com", "plainPassword", UserRole.USER);
+    @DisplayName("register: codifica a password e cria sempre um CUSTOMER (papel não vem do cliente)")
+    void register_shouldEncodePasswordAndForceCustomerRole() {
+        RegisterRequestDTO request = new RegisterRequestDTO("new@example.com", "plainPassword");
 
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.empty());
         when(passwordEncoder.encode(request.password())).thenReturn("encodedPassword");
@@ -72,22 +78,58 @@ class AuthServiceTest {
         authService.register(request);
 
         verify(passwordEncoder).encode("plainPassword");
-        verify(userRepository).save(any(User.class));
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getRole()).isEqualTo(UserRole.CUSTOMER);
     }
 
     @Test
     @DisplayName("register: deve lançar UserAlreadyExistsException quando o email já existe")
     void register_shouldThrow_whenEmailAlreadyExists() {
-        RegisterRequestDTO request = new RegisterRequestDTO("existing@example.com", "password", UserRole.USER);
+        RegisterRequestDTO request = new RegisterRequestDTO("existing@example.com", "password");
         User existingUser = User.builder()
                 .email("existing@example.com")
                 .password("encoded")
-                .role(UserRole.USER)
+                .role(UserRole.CUSTOMER)
                 .build();
 
         when(userRepository.findByEmail(request.email())).thenReturn(Optional.of(existingUser));
 
         assertThrows(UserAlreadyExistsException.class, () -> authService.register(request));
+    }
+
+    @Test
+    @DisplayName("createUser: cria usuário com o papel informado (uso administrativo)")
+    void createUser_shouldUseProvidedRole() {
+        when(userRepository.findByEmail("org@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("pwd")).thenReturn("enc");
+
+        authService.createUser("org@example.com", "pwd", UserRole.ORGANIZER);
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getRole()).isEqualTo(UserRole.ORGANIZER);
+    }
+
+    @Test
+    @DisplayName("logout: revoga o access token (jti + expiração) e remove o refresh token")
+    void logout_shouldRevokeAccessTokenAndDeleteRefreshToken() {
+        Instant exp = Instant.now().plusSeconds(3600);
+        when(tokenService.extractTokenId("access")).thenReturn("jti-1");
+        when(tokenService.extractExpiration("access")).thenReturn(exp);
+
+        authService.logout("access", "refresh-value");
+
+        verify(tokenBlacklistService).revoke("jti-1", exp);
+        verify(refreshTokenService).deleteByToken("refresh-value");
+    }
+
+    @Test
+    @DisplayName("logout: sem access token, apenas remove o refresh token")
+    void logout_shouldHandleMissingAccessToken() {
+        authService.logout(null, "refresh-value");
+
+        verify(refreshTokenService).deleteByToken("refresh-value");
     }
 
     // -------------------------------------------------------------------------

@@ -70,8 +70,7 @@ class AuthControllerTest {
                         .content("""
                                 {
                                   "email": "newuser@example.com",
-                                  "password": "StrongPassword123",
-                                  "role": "USER"
+                                  "password": "StrongPassword123"
                                 }
                                 """))
                 .andExpect(status().isCreated());

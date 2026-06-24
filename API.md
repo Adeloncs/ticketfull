@@ -26,12 +26,9 @@ Observacoes:
 
 ## Papeis
 
-Valores aceitos para `role` no cadastro:
+Papeis existentes: `ADMIN`, `ORGANIZER`, `CUSTOMER` (`USER` é o papel base).
 
-- `ADMIN`
-- `USER`
-- `ORGANIZER`
-- `CUSTOMER`
+O auto-registro publico (`POST /auth/register`) cria **sempre** um `CUSTOMER` — o papel nao e aceito do cliente. Papeis privilegiados (`ORGANIZER`/`ADMIN`) sao provisionados por um `ADMIN` via `POST /admin/users`. Um `ADMIN` inicial pode ser criado no startup pelas variaveis `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
 
 Regras de acesso:
 
@@ -42,6 +39,7 @@ Regras de acesso:
 - `POST /orders/{id}/cancel`: `CUSTOMER` ou `ADMIN`
 - `POST /orders/{id}/refund`: `CUSTOMER` ou `ADMIN`
 - `POST /tickets/{codeHash}/validate`: `ORGANIZER` ou `ADMIN`
+- `POST /admin/users`: apenas `ADMIN`
 - `POST /webhooks/payments`: publica (callback do gateway de pagamento)
 - `GET /events`, `GET /events/{id}`, `GET /events/{eventId}/ticket-batches`: publicas (sem autenticacao)
 - Demais rotas fora de `/auth` exigem autenticacao
@@ -52,15 +50,14 @@ Regras de acesso:
 
 `POST /auth/register`
 
-Cria um novo usuario.
+Auto-registro publico. Cria sempre um usuario `CUSTOMER` (o papel nao e aceito do cliente).
 
 Request:
 
 ```json
 {
-  "email": "organizador@ticketfull.com",
-  "password": "senha123",
-  "role": "ORGANIZER"
+  "email": "cliente@ticketfull.com",
+  "password": "senha123"
 }
 ```
 
@@ -69,6 +66,8 @@ Responses:
 - `201 Created`: usuario criado
 - `400 Bad Request`: payload invalido
 - `409 Conflict`: usuario ja existente
+
+Para criar `ORGANIZER`/`ADMIN`, use `POST /admin/users` (ver secao Administracao).
 
 ### 2. Login
 
@@ -126,11 +125,34 @@ Possiveis respostas:
 
 `POST /auth/logout`
 
-Invalida o refresh token atual e limpa o cookie.
+Encerra a sessao: **revoga o access token** (lista de bloqueio, validada pelo filtro de seguranca em cada requisicao), invalida o refresh token e limpa o cookie. Envie o access token no header `Authorization: Bearer <token>` para que ele seja revogado.
 
 Responses:
 
 - `204 No Content`: logout efetuado
+
+### 4b. Criar usuario (Administracao)
+
+`POST /admin/users`
+
+Requer `Authorization: Bearer <token>` com perfil `ADMIN`. Provisiona usuarios com papel definido.
+
+Request:
+
+```json
+{
+  "email": "organizador@ticketfull.com",
+  "password": "senha123",
+  "role": "ORGANIZER"
+}
+```
+
+Responses:
+
+- `201 Created`: usuario criado
+- `400 Bad Request`: payload invalido
+- `403 Forbidden`: perfil sem permissao
+- `409 Conflict`: usuario ja existente
 
 ### 5. Criar evento
 
@@ -507,16 +529,16 @@ Exemplo de rate limit (`429 Too Many Requests` em `/auth/login`):
 
 ## Exemplo de fluxo
 
-1. Registrar um usuario `ORGANIZER`.
-2. Fazer login e guardar o `accessToken`.
+1. Ter um `ADMIN` (criado no startup via `ADMIN_EMAIL`/`ADMIN_PASSWORD`); logado como ele, criar um `ORGANIZER` com `POST /admin/users`.
+2. Fazer login como o `ORGANIZER` e guardar o `accessToken`.
 3. Criar um evento com `POST /events`.
 4. Criar um lote com `POST /events/{eventId}/ticket-batches`.
-5. Registrar um usuario `CUSTOMER`.
-6. Fazer login como cliente.
-7. Comprar ingressos com `POST /orders` (assentos retidos com prazo `expiresAt`).
-8. Iniciar o checkout com `POST /orders/{id}/checkout` e guardar o `paymentIntentId`.
-9. Confirmar o pagamento simulando o gateway: `POST /webhooks/payments` com o `paymentIntentId` (pedido vai para `PAID`).
-10. Validar cada ingresso na entrada com `POST /tickets/{codeHash}/validate`.
+5. Registrar um usuario `CUSTOMER` com `POST /auth/register` e fazer login.
+6. Comprar ingressos com `POST /orders` (assentos retidos com prazo `expiresAt`).
+7. Iniciar o checkout com `POST /orders/{id}/checkout` e guardar o `paymentIntentId`.
+8. Confirmar o pagamento simulando o gateway: `POST /webhooks/payments` com o `paymentIntentId` (pedido vai para `PAID`).
+9. Validar cada ingresso na entrada com `POST /tickets/{codeHash}/validate`.
+10. Encerrar a sessao com `POST /auth/logout` (revoga o access token).
 
 ## cURL rapido
 

@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: jwt-api-postgres
     environment:
-      POSTGRES_DB: jwt_api
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-jwt_api}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
     ports:
       - "5432:5432"
     volumes:
@@ -24,10 +24,12 @@ services:
       dockerfile: Dockerfile
     container_name: jwt-api
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/jwt_api
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
-      JWT_SECRET: ${JWT_SECRET:-my-secret-key-for-dev-only-32chars!!}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-jwt_api}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "8081:8081"
     depends_on:

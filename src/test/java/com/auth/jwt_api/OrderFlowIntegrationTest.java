@@ -38,7 +38,10 @@ import com.auth.jwt_api.support.TestcontainersConfiguration;
  *
  * <p>O intervalo do job de expiração é elevado para 1h para não competir com a expiração manual do teste.
  */
-@SpringBootTest(properties = "app.order.expiration-scan-ms=3600000")
+@SpringBootTest(properties = {
+        "app.order.expiration-scan-ms=3600000",
+        "api.security.token.secret=test-secret-key-that-is-at-least-32-bytes-long"
+})
 @Import(TestcontainersConfiguration.class)
 class OrderFlowIntegrationTest {
 

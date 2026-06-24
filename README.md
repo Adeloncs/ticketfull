@@ -109,31 +109,42 @@ Configuração base em `src/main/resources/application.properties`.
 CREATE DATABASE jwt_api;
 ```
 
+### Variáveis de ambiente (segredos)
+
+Os segredos **não** têm valores padrão no código — a aplicação falha no startup se `JWT_SECRET` não for definido. Copie `.env.example` para `.env` e ajuste:
+
+```bash
+cp .env.example .env
+```
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `JWT_SECRET` | sim | Chave de assinatura do JWT (>= 32 caracteres). Ex.: `openssl rand -base64 48` |
+| `POSTGRES_PASSWORD` | sim (Docker) | Senha do PostgreSQL |
+| `POSTGRES_DB`, `POSTGRES_USER` | não | Padrão `jwt_api` / `postgres` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | não | Se definidas, criam um ADMIN inicial no startup |
+
 ### Principais propriedades
 
 ```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/jwt_api
-spring.datasource.username=postgres
-spring.datasource.password=postgres
-
+spring.datasource.url=${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/jwt_api}
 spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.open-in-view=false
 spring.flyway.baseline-on-migrate=true
 
-api.security.token.secret=${JWT_SECRET:my-secret-key-for-dev-only-32chars!!}
+# Segredo obrigatório (sem fallback) — falha no startup se ausente
+api.security.token.secret=${JWT_SECRET}
 api.security.token.expiration=7200000
 api.security.token.refresh-expiration=604800000
 
-# opcionais (com valor padrão no código)
-rate-limit.capacity=5
-rate-limit.refill-minutes=5
-
-# opcional
-app.cors.allowed-origins=http://localhost:3000
+# Pool de conexões e limites de requisição
+spring.datasource.hikari.maximum-pool-size=10
+server.tomcat.max-http-form-post-size=2MB
 
 server.port=8081
 ```
 
-Importante: em produção, defina `JWT_SECRET` com chave forte (>= 32 caracteres) e nunca versione segredos reais.
+Para produção, ative o perfil `prod` (`SPRING_PROFILES_ACTIVE=prod`): logs JSON (ECS), Swagger desabilitado, health detalhado apenas para usuários autorizados.
 
 ## Como executar
 
@@ -168,22 +179,22 @@ java -jar target/jwt-api-0.0.1-SNAPSHOT.jar
 
 ### Autenticação
 
-- `POST /auth/register`
+- `POST /auth/register` (auto-registro público — cria sempre `CUSTOMER`)
 - `POST /auth/login`
 - `POST /auth/refresh`
-- `POST /auth/logout`
+- `POST /auth/logout` (revoga o access token; envie o header `Authorization`)
+- `POST /admin/users` (apenas `ADMIN` — provisiona `ORGANIZER`/`ADMIN`)
 
-Exemplo de registro:
+Exemplo de registro (sempre CUSTOMER):
 
 ```json
 {
-  "email": "organizador@email.com",
-  "password": "senha123",
-  "role": "ORGANIZER"
+  "email": "cliente@email.com",
+  "password": "senha123"
 }
 ```
 
-O campo `role` aceita: `ADMIN`, `USER`, `ORGANIZER`, `CUSTOMER`.
+Para criar um `ORGANIZER`/`ADMIN`, autentique-se como `ADMIN` e use `POST /admin/users` com o campo `role`.
 
 Exemplo de login:
 
@@ -271,9 +282,12 @@ Authorization: Bearer <access_token>
 
 - Senhas com BCrypt
 - Sessão stateless (`SessionCreationPolicy.STATELESS`)
-- JWT assinado para access token
+- JWT assinado para access token (com `jti` para permitir revogação)
+- **Revogação de access token no logout** (lista de bloqueio em banco, validada pelo filtro de segurança; limpeza periódica das entradas expiradas)
 - Refresh token persistido com expiração e rotação
 - Cookie de refresh com `HttpOnly`, `Secure`, `SameSite=Lax`, path `/auth`
+- **Auto-registro restrito a `CUSTOMER`**; papéis privilegiados só por `ADMIN` (`/admin/users`)
+- **Segredos sem fallback no código** — `JWT_SECRET` obrigatório no startup
 - CORS com credenciais habilitadas
 - CSRF desabilitado para API stateless
 - Rate limit no login com resposta `429` e `Retry-After`

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import com.auth.jwt_api.repositories.UserRepository;
+import com.auth.jwt_api.services.TokenBlacklistService;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,10 +20,13 @@ public class SecurityFilter extends OncePerRequestFilter {
 
     private final TokenService tokenService;
     private final UserRepository userRepository;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public SecurityFilter(TokenService tokenService, UserRepository userRepository) {
+    public SecurityFilter(TokenService tokenService, UserRepository userRepository,
+                          TokenBlacklistService tokenBlacklistService) {
         this.tokenService = tokenService;
         this.userRepository = userRepository;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -33,7 +37,8 @@ public class SecurityFilter extends OncePerRequestFilter {
         if (token != null) {
             String email = tokenService.validateToken(token);
 
-            if (!email.isEmpty()) {
+            // Token válido e não revogado (não consta na lista de bloqueio)
+            if (!email.isEmpty() && !tokenBlacklistService.isRevoked(tokenService.extractTokenId(token))) {
                 var user = userRepository.findByEmail(email);
                 if (user.isPresent()) {
                     var authentication = new UsernamePasswordAuthenticationToken(

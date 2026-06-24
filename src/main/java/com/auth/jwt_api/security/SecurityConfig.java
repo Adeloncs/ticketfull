@@ -74,6 +74,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/orders/*/refund").hasAnyRole("CUSTOMER", "ADMIN")
                         // Validação/check-in de ingresso é ação de organizador (ou admin)
                         .requestMatchers(HttpMethod.POST, "/tickets/*/validate").hasAnyRole("ORGANIZER", "ADMIN")
+                        // Provisionamento de usuários privilegiados é exclusivo de ADMIN
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exception -> exception
