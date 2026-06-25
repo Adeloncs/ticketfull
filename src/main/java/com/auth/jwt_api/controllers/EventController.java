@@ -14,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -64,5 +65,27 @@ public class EventController {
     @Operation(summary = "Buscar evento por id")
     public ResponseEntity<EventResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(eventService.findById(id));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Atualizar evento (organizador dono)")
+    public ResponseEntity<EventResponseDTO> update(@PathVariable UUID id,
+                                                   @RequestBody @Valid EventRequestDTO request,
+                                                   @AuthenticationPrincipal User organizer) {
+        return ResponseEntity.ok(eventService.update(id, request, organizer));
+    }
+
+    @PostMapping("/{id}/publish")
+    @Operation(summary = "Publicar evento (organizador dono) — DRAFT -> PUBLISHED")
+    public ResponseEntity<EventResponseDTO> publish(@PathVariable UUID id,
+                                                    @AuthenticationPrincipal User organizer) {
+        return ResponseEntity.ok(eventService.publish(id, organizer));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancelar evento (organizador dono) — encerra novas vendas")
+    public ResponseEntity<EventResponseDTO> cancel(@PathVariable UUID id,
+                                                   @AuthenticationPrincipal User organizer) {
+        return ResponseEntity.ok(eventService.cancel(id, organizer));
     }
 }

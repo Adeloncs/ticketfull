@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.auth.jwt_api.models.Event;
+import com.auth.jwt_api.models.EventStatus;
 
 public record EventResponseDTO(
         UUID id,
@@ -11,6 +12,7 @@ public record EventResponseDTO(
         String description,
         Instant eventDate,
         String location,
+        EventStatus status,
         UUID organizerId,
         Instant createdAt,
         Instant updatedAt) {
@@ -22,6 +24,7 @@ public record EventResponseDTO(
                 event.getDescription(),
                 event.getEventDate(),
                 event.getLocation(),
+                event.getStatus(),
                 event.getOrganizer().getId(),
                 event.getCreatedAt(),
                 event.getUpdatedAt());

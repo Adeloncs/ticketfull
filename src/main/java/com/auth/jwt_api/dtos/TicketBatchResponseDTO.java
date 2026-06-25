@@ -1,6 +1,7 @@
 package com.auth.jwt_api.dtos;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 import com.auth.jwt_api.models.TicketBatch;
@@ -11,7 +12,9 @@ public record TicketBatchResponseDTO(
         String name,
         BigDecimal price,
         Integer totalCapacity,
-        Integer availableSeats) {
+        Integer availableSeats,
+        Instant salesStartAt,
+        Instant salesEndAt) {
 
     public static TicketBatchResponseDTO from(TicketBatch batch) {
         return new TicketBatchResponseDTO(
@@ -20,6 +23,8 @@ public record TicketBatchResponseDTO(
                 batch.getName(),
                 batch.getPrice(),
                 batch.getTotalCapacity(),
-                batch.getAvailableSeats());
+                batch.getAvailableSeats(),
+                batch.getSalesStartAt(),
+                batch.getSalesEndAt());
     }
 }

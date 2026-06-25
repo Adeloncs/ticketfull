@@ -36,6 +36,8 @@ public class TicketBatchService {
                 .price(request.price())
                 .totalCapacity(request.totalCapacity())
                 .availableSeats(request.totalCapacity()) // lote inicia com toda a capacidade disponível
+                .salesStartAt(request.salesStartAt())
+                .salesEndAt(request.salesEndAt())
                 .build();
 
         return TicketBatchResponseDTO.from(ticketBatchRepository.save(batch));

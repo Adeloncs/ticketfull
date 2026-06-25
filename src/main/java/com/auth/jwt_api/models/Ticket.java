@@ -44,6 +44,11 @@ public class Ticket {
     @JoinColumn(name = "ticket_batch_id", nullable = false)
     private TicketBatch ticketBatch;
 
+    /** Detentor atual após transferência; nulo = o dono é o cliente do pedido. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "holder_id")
+    private User holder;
+
     @Column(name = "code_hash", unique = true, nullable = false)
     private String codeHash; // hash único — simula o QR Code
 
@@ -59,5 +64,19 @@ public class Ticket {
     /** Marca o ingresso como utilizado (check-in na portaria). */
     public void markAsUsed() {
         this.status = TicketStatus.USED;
+    }
+
+    /** Detentor efetivo: o holder, se houver transferência; caso contrário, o cliente do pedido. */
+    public User effectiveOwner() {
+        if (holder != null) {
+            return holder;
+        }
+        return order != null ? order.getCustomer() : null;
+    }
+
+    /** Transfere o ingresso para um novo detentor e invalida o QR anterior com um novo código. */
+    public void transferTo(User newHolder, String newCodeHash) {
+        this.holder = newHolder;
+        this.codeHash = newCodeHash;
     }
 }

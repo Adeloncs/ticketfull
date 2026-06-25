@@ -55,6 +55,14 @@ public class TicketBatch {
     @Column(name = "available_seats", nullable = false)
     private Integer availableSeats;
 
+    /** Início da janela de vendas (nulo = sem restrição de início). */
+    @Column(name = "sales_start_at")
+    private Instant salesStartAt;
+
+    /** Fim da janela de vendas (nulo = sem restrição de fim). */
+    @Column(name = "sales_end_at")
+    private Instant salesEndAt;
+
     @OneToMany(mappedBy = "ticketBatch")
     @Builder.Default
     private List<Ticket> tickets = new ArrayList<>();
@@ -78,5 +86,13 @@ public class TicketBatch {
     /** Devolve assentos ao lote (ex.: cancelamento de pedido). */
     public void increaseAvailableSeats(int quantity) {
         this.availableSeats += quantity;
+    }
+
+    /** Indica se o lote está dentro da janela de vendas no instante informado. */
+    public boolean isOnSale(Instant now) {
+        if (salesStartAt != null && now.isBefore(salesStartAt)) {
+            return false;
+        }
+        return salesEndAt == null || !now.isAfter(salesEndAt);
     }
 }

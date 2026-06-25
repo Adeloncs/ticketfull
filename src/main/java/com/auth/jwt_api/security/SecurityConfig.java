@@ -64,8 +64,11 @@ public class SecurityConfig {
                         // Navegação de eventos e lotes é pública (clientes visualizam sem login)
                         .requestMatchers(HttpMethod.GET, "/events", "/events/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/events/*/ticket-batches").permitAll()
-                        // Apenas organizadores (ou admin) criam eventos e definem lotes
+                        // Apenas organizadores (ou admin) criam/gerenciam eventos e definem lotes
                         .requestMatchers(HttpMethod.POST, "/events").hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/events/*").hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/events/*/publish").hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/events/*/cancel").hasAnyRole("ORGANIZER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/events/*/ticket-batches").hasAnyRole("ORGANIZER", "ADMIN")
                         // Apenas clientes (ou admin) compram ingressos e confirmam pagamento
                         .requestMatchers(HttpMethod.POST, "/orders").hasAnyRole("CUSTOMER", "ADMIN")

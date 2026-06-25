@@ -16,7 +16,10 @@ import jakarta.persistence.criteria.Predicate;
 import com.auth.jwt_api.dtos.EventRequestDTO;
 import com.auth.jwt_api.dtos.EventResponseDTO;
 import com.auth.jwt_api.exceptions.EventNotFoundException;
+import com.auth.jwt_api.exceptions.EventOwnershipException;
+import com.auth.jwt_api.exceptions.InvalidEventStateException;
 import com.auth.jwt_api.models.Event;
+import com.auth.jwt_api.models.EventStatus;
 import com.auth.jwt_api.models.User;
 import com.auth.jwt_api.repositories.EventRepository;
 
@@ -46,6 +49,8 @@ public class EventService {
     public Page<EventResponseDTO> search(String location, Instant from, Instant to, Pageable pageable) {
         Specification<Event> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // Busca pública: apenas eventos publicados
+            predicates.add(cb.equal(root.get("status"), EventStatus.PUBLISHED));
             if (location != null && !location.isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("location")), "%" + location.toLowerCase() + "%"));
             }
@@ -58,6 +63,48 @@ public class EventService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
         return eventRepository.findAll(spec, pageable).map(EventResponseDTO::from);
+    }
+
+    /** Atualiza os dados de um evento do próprio organizador. Não permitido em eventos cancelados. */
+    @Transactional
+    public EventResponseDTO update(UUID id, EventRequestDTO request, User organizer) {
+        Event event = getEntity(id);
+        requireOwnership(event, organizer);
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new InvalidEventStateException(id, event.getStatus(), "updated");
+        }
+        event.updateDetails(request.title(), request.description(), request.eventDate(), request.location());
+        return EventResponseDTO.from(event);
+    }
+
+    /** Publica um evento DRAFT do próprio organizador, tornando-o visível e disponível para venda. */
+    @Transactional
+    public EventResponseDTO publish(UUID id, User organizer) {
+        Event event = getEntity(id);
+        requireOwnership(event, organizer);
+        if (event.getStatus() != EventStatus.DRAFT) {
+            throw new InvalidEventStateException(id, event.getStatus(), "published");
+        }
+        event.markAsPublished();
+        return EventResponseDTO.from(event);
+    }
+
+    /** Cancela um evento do próprio organizador (encerra novas vendas). */
+    @Transactional
+    public EventResponseDTO cancel(UUID id, User organizer) {
+        Event event = getEntity(id);
+        requireOwnership(event, organizer);
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            throw new InvalidEventStateException(id, event.getStatus(), "cancelled");
+        }
+        event.markAsCancelled();
+        return EventResponseDTO.from(event);
+    }
+
+    private void requireOwnership(Event event, User organizer) {
+        if (!event.getOrganizer().getId().equals(organizer.getId())) {
+            throw new EventOwnershipException();
+        }
     }
 
     @Transactional(readOnly = true)

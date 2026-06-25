@@ -1,22 +1,23 @@
 package com.auth.jwt_api.services;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.auth.jwt_api.dtos.CheckoutResponseDTO;
 import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
+import com.auth.jwt_api.events.OrderPaidEvent;
+import com.auth.jwt_api.exceptions.EventNotAvailableException;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
 import com.auth.jwt_api.exceptions.OrderNotCancellableException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
@@ -24,6 +25,9 @@ import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.OrderNotRefundableException;
 import com.auth.jwt_api.exceptions.PaymentIntentNotFoundException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
+import com.auth.jwt_api.exceptions.TicketBatchNotOnSaleException;
+import com.auth.jwt_api.models.Event;
+import com.auth.jwt_api.models.EventStatus;
 import com.auth.jwt_api.models.Order;
 import com.auth.jwt_api.models.OrderStatus;
 import com.auth.jwt_api.models.Ticket;
@@ -47,17 +51,20 @@ public class OrderService {
     private final TicketBatchRepository ticketBatchRepository;
     private final PaymentGateway paymentGateway;
     private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher eventPublisher;
     private final Duration reservationDuration;
 
     public OrderService(OrderRepository orderRepository,
                         TicketBatchRepository ticketBatchRepository,
                         PaymentGateway paymentGateway,
                         MeterRegistry meterRegistry,
+                        ApplicationEventPublisher eventPublisher,
                         @Value("${app.order.reservation-minutes:15}") long reservationMinutes) {
         this.orderRepository = orderRepository;
         this.ticketBatchRepository = ticketBatchRepository;
         this.paymentGateway = paymentGateway;
         this.meterRegistry = meterRegistry;
+        this.eventPublisher = eventPublisher;
         this.reservationDuration = Duration.ofMinutes(reservationMinutes);
     }
 
@@ -71,6 +78,14 @@ public class OrderService {
         TicketBatch batch = ticketBatchRepository.findByIdForUpdate(request.ticketBatchId())
                 .orElseThrow(() -> new TicketBatchNotFoundException(request.ticketBatchId()));
 
+        Event event = batch.getEvent();
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new EventNotAvailableException(event.getId());
+        }
+        if (!batch.isOnSale(Instant.now())) {
+            throw new TicketBatchNotOnSaleException(batch.getId());
+        }
+
         int quantity = request.quantity();
         if (batch.getAvailableSeats() < quantity) {
             throw new InsufficientSeatsException(batch.getAvailableSeats(), quantity);
@@ -81,7 +96,7 @@ public class OrderService {
 
         Order order = Order.builder()
                 .customer(customer)
-                .event(batch.getEvent())
+                .event(event)
                 .status(OrderStatus.PENDING)
                 .totalAmount(total)
                 .expiresAt(Instant.now().plus(reservationDuration))
@@ -91,7 +106,7 @@ public class OrderService {
             order.getTickets().add(Ticket.builder()
                     .order(order)
                     .ticketBatch(batch)
-                    .codeHash(generateCodeHash())
+                    .codeHash(CodeHashGenerator.generate())
                     .status(TicketStatus.VALID)
                     .build());
         }
@@ -104,10 +119,8 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrderResponseDTO> findMyOrders(UUID customerId) {
-        return orderRepository.findByCustomerId(customerId).stream()
-                .map(OrderResponseDTO::from)
-                .toList();
+    public Page<OrderResponseDTO> findMyOrders(UUID customerId, Pageable pageable) {
+        return orderRepository.findByCustomerId(customerId, pageable).map(OrderResponseDTO::from);
     }
 
     @Transactional(readOnly = true)
@@ -160,6 +173,9 @@ public class OrderService {
 
         order.markAsPaid();
         countTransition(OrderStatus.PAID);
+        // Notificação assíncrona (e-mail + QR) é disparada após o commit pelo listener.
+        eventPublisher.publishEvent(new OrderPaidEvent(
+                order.getId(), order.getCustomer().getEmail(), order.getTickets().size()));
     }
 
     /**
@@ -239,16 +255,5 @@ public class OrderService {
                 .orElseThrow(() -> new TicketBatchNotFoundException(batchId));
         batch.increaseAvailableSeats(quantity);
         order.getTickets().clear();
-    }
-
-    /** Hash único que simula o QR Code do ingresso (SHA-256 de um UUID aleatório). */
-    private String generateCodeHash() {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
     }
 }

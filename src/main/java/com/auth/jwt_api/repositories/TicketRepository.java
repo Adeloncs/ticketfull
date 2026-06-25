@@ -23,4 +23,9 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM Ticket t WHERE t.codeHash = :codeHash")
     Optional<Ticket> findByCodeHashForUpdate(@Param("codeHash") String codeHash);
+
+    /** Carrega o ingresso por id com lock pessimista (transferência). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Ticket t WHERE t.id = :id")
+    Optional<Ticket> findByIdForUpdate(@Param("id") UUID id);
 }

@@ -1,9 +1,12 @@
 package com.auth.jwt_api.controllers;
 
 import java.net.URI;
-import java.util.List;
 import java.util.UUID;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,9 +46,11 @@ public class OrderController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar meus pedidos")
-    public ResponseEntity<List<OrderResponseDTO>> list(@AuthenticationPrincipal User customer) {
-        return ResponseEntity.ok(orderService.findMyOrders(customer.getId()));
+    @Operation(summary = "Listar meus pedidos (paginado)")
+    public ResponseEntity<PagedModel<OrderResponseDTO>> list(@AuthenticationPrincipal User customer,
+                                                             @ParameterObject Pageable pageable) {
+        Page<OrderResponseDTO> page = orderService.findMyOrders(customer.getId(), pageable);
+        return ResponseEntity.ok(new PagedModel<>(page));
     }
 
     @GetMapping("/{id}")
