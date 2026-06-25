@@ -50,11 +50,14 @@ Além do módulo de autenticação, o projeto já inclui o domínio de eventos:
 - Registro, login, refresh e logout com JWT + refresh token com rotação
 - Refresh token em cookie HttpOnly (path `/auth`)
 - Rate limiting em `/auth/login` por IP (Bucket4j)
-- Criação e consulta de eventos
-- Criação e consulta de lotes de ingressos por evento
-- Compra de ingressos (pedido com múltiplos tickets)
-- Confirmação de pagamento de pedido
+- **Ciclo de vida do evento** (`DRAFT`/`PUBLISHED`/`CANCELLED`): atualizar, publicar e cancelar; só eventos publicados aparecem na busca pública
+- Lotes de ingressos com **janela de vendas** opcional (`salesStartAt`/`salesEndAt`)
+- Compra de ingressos com reserva e prazo (apenas eventos publicados e lotes dentro da janela)
+- Confirmação de pagamento via gateway + webhook idempotente; estorno
+- **Transferência de ingresso** entre usuários (regenera o código/QR)
 - Validação de ingresso por código hash (check-in)
+- **Notificação assíncrona** de confirmação de pagamento (evento de domínio + `@TransactionalEventListener` + `@Async`)
+- Listagens paginadas (eventos e meus pedidos)
 - Migrações versionadas com Flyway
 - Respostas de erro padronizadas com Problem Details (RFC 9457)
 
@@ -217,11 +220,14 @@ Resposta:
 
 ### Eventos
 
-- `POST /events`
-- `GET /events`
+- `POST /events` (cria como `DRAFT`)
+- `GET /events` (público, paginado; só `PUBLISHED`)
 - `GET /events/{id}`
+- `PUT /events/{id}` (atualizar — organizador dono)
+- `POST /events/{id}/publish` (`DRAFT` -> `PUBLISHED`)
+- `POST /events/{id}/cancel` (encerra novas vendas)
 
-Payload de criação:
+Payload de criação/atualização:
 
 ```json
 {
@@ -237,25 +243,32 @@ Payload de criação:
 - `POST /events/{eventId}/ticket-batches`
 - `GET /events/{eventId}/ticket-batches`
 
-Payload de criação:
+Payload de criação (`salesStartAt`/`salesEndAt` opcionais — nulos = sem restrição):
 
 ```json
 {
   "name": "Lote Promocional",
   "price": 99.90,
-  "totalCapacity": 300
+  "totalCapacity": 300,
+  "salesStartAt": "2026-08-01T00:00:00Z",
+  "salesEndAt": "2026-09-09T23:59:59Z"
 }
 ```
 
 ### Pedidos
 
-- `POST /orders`
-- `GET /orders`
+- `POST /orders` (apenas eventos `PUBLISHED` e lotes dentro da janela de vendas)
+- `GET /orders` (paginado)
 - `GET /orders/{id}`
 - `POST /orders/{id}/checkout` (cria PaymentIntent; pagamento confirmado via webhook)
 - `POST /orders/{id}/cancel`
 - `POST /orders/{id}/refund`
 - `POST /webhooks/payments` (callback público e idempotente do gateway)
+
+### Ingressos
+
+- `POST /tickets/{codeHash}/validate` (check-in — organizador dono)
+- `POST /tickets/{id}/transfer` (transferir para outro usuário — detentor atual)
 
 Payload de compra:
 
@@ -265,12 +278,6 @@ Payload de compra:
   "quantity": 2
 }
 ```
-
-### Ingressos
-
-- `POST /tickets/{codeHash}/validate`
-
-Usado para check-in: altera status do ingresso de `VALID` para `USED`.
 
 ### Header para rotas protegidas
 
