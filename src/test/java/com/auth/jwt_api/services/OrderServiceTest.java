@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.auth.jwt_api.dtos.CheckoutResponseDTO;
 import com.auth.jwt_api.dtos.OrderRequestDTO;
 import com.auth.jwt_api.dtos.OrderResponseDTO;
+import com.auth.jwt_api.exceptions.EventNotAvailableException;
 import com.auth.jwt_api.exceptions.InsufficientSeatsException;
 import com.auth.jwt_api.exceptions.OrderNotCancellableException;
 import com.auth.jwt_api.exceptions.OrderNotFoundException;
@@ -29,7 +30,9 @@ import com.auth.jwt_api.exceptions.OrderNotPayableException;
 import com.auth.jwt_api.exceptions.OrderNotRefundableException;
 import com.auth.jwt_api.exceptions.PaymentIntentNotFoundException;
 import com.auth.jwt_api.exceptions.TicketBatchNotFoundException;
+import com.auth.jwt_api.exceptions.TicketBatchNotOnSaleException;
 import com.auth.jwt_api.models.Event;
+import com.auth.jwt_api.models.EventStatus;
 import com.auth.jwt_api.models.Order;
 import com.auth.jwt_api.models.OrderStatus;
 import com.auth.jwt_api.models.Ticket;
@@ -41,6 +44,9 @@ import com.auth.jwt_api.payments.PaymentGateway;
 import com.auth.jwt_api.payments.PaymentIntent;
 import com.auth.jwt_api.repositories.OrderRepository;
 import com.auth.jwt_api.repositories.TicketBatchRepository;
+
+import org.mockito.Mockito;
+import org.springframework.context.ApplicationEventPublisher;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -61,7 +67,7 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         orderService = new OrderService(orderRepository, ticketBatchRepository, paymentGateway,
-                new SimpleMeterRegistry(), 15);
+                new SimpleMeterRegistry(), Mockito.mock(ApplicationEventPublisher.class), 15);
     }
 
     private User customer() {
@@ -69,7 +75,8 @@ class OrderServiceTest {
     }
 
     private TicketBatch batch(int availableSeats, String price) {
-        Event event = Event.builder().id(UUID.randomUUID()).title("E").location("L").build();
+        Event event = Event.builder().id(UUID.randomUUID()).title("E").location("L")
+                .status(EventStatus.PUBLISHED).build();
         return TicketBatch.builder()
                 .id(UUID.randomUUID())
                 .event(event)
@@ -126,6 +133,39 @@ class OrderServiceTest {
         when(ticketBatchRepository.findByIdForUpdate(batchId)).thenReturn(Optional.empty());
 
         assertThrows(TicketBatchNotFoundException.class, () -> orderService.create(request, customer));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create: lança EventNotAvailableException quando o evento não está PUBLISHED")
+    void create_shouldThrow_whenEventNotPublished() {
+        User customer = customer();
+        Event draft = Event.builder().id(UUID.randomUUID()).title("E").location("L")
+                .status(EventStatus.DRAFT).build();
+        TicketBatch batch = TicketBatch.builder().id(UUID.randomUUID()).event(draft).name("Pista")
+                .price(new BigDecimal("100.00")).totalCapacity(10).availableSeats(10).build();
+        OrderRequestDTO request = new OrderRequestDTO(batch.getId(), 1);
+
+        when(ticketBatchRepository.findByIdForUpdate(batch.getId())).thenReturn(Optional.of(batch));
+
+        assertThrows(EventNotAvailableException.class, () -> orderService.create(request, customer));
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("create: lança TicketBatchNotOnSaleException quando fora da janela de vendas")
+    void create_shouldThrow_whenBatchNotOnSale() {
+        User customer = customer();
+        Event published = Event.builder().id(UUID.randomUUID()).title("E").location("L")
+                .status(EventStatus.PUBLISHED).build();
+        TicketBatch batch = TicketBatch.builder().id(UUID.randomUUID()).event(published).name("Pista")
+                .price(new BigDecimal("100.00")).totalCapacity(10).availableSeats(10)
+                .salesStartAt(Instant.now().plusSeconds(3600)).build(); // venda começa no futuro
+        OrderRequestDTO request = new OrderRequestDTO(batch.getId(), 1);
+
+        when(ticketBatchRepository.findByIdForUpdate(batch.getId())).thenReturn(Optional.of(batch));
+
+        assertThrows(TicketBatchNotOnSaleException.class, () -> orderService.create(request, customer));
         verify(orderRepository, never()).save(any());
     }
 
@@ -241,7 +281,8 @@ class OrderServiceTest {
     }
 
     private TicketBatch batchWithSeats(int available, int total) {
-        Event event = Event.builder().id(UUID.randomUUID()).title("E").location("L").build();
+        Event event = Event.builder().id(UUID.randomUUID()).title("E").location("L")
+                .status(EventStatus.PUBLISHED).build();
         return TicketBatch.builder()
                 .id(UUID.randomUUID())
                 .event(event)

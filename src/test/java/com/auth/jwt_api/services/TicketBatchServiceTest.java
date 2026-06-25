@@ -51,7 +51,7 @@ class TicketBatchServiceTest {
     void addToEvent_shouldInitializeAvailableSeats() {
         User organizer = user(UUID.randomUUID());
         Event event = eventOwnedBy(organizer);
-        TicketBatchRequestDTO request = new TicketBatchRequestDTO("Pista", new BigDecimal("100.00"), 500);
+        TicketBatchRequestDTO request = new TicketBatchRequestDTO("Pista", new BigDecimal("100.00"), 500, null, null);
 
         when(eventService.getEntity(event.getId())).thenReturn(event);
         when(ticketBatchRepository.save(any(TicketBatch.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -70,7 +70,7 @@ class TicketBatchServiceTest {
         User owner = user(UUID.randomUUID());
         User intruder = user(UUID.randomUUID());
         Event event = eventOwnedBy(owner);
-        TicketBatchRequestDTO request = new TicketBatchRequestDTO("Pista", new BigDecimal("100.00"), 500);
+        TicketBatchRequestDTO request = new TicketBatchRequestDTO("Pista", new BigDecimal("100.00"), 500, null, null);
 
         when(eventService.getEntity(event.getId())).thenReturn(event);
 

@@ -57,7 +57,8 @@ class TicketControllerTest {
     @Test
     @DisplayName("POST /tickets/{code}/validate: ORGANIZER valida -> 200, status USED")
     void validate_shouldReturn200_forOrganizer() throws Exception {
-        TicketResponseDTO dto = new TicketResponseDTO(UUID.randomUUID(), UUID.randomUUID(), CODE, TicketStatus.USED);
+        TicketResponseDTO dto = new TicketResponseDTO(UUID.randomUUID(), UUID.randomUUID(), CODE,
+                TicketStatus.USED, UUID.randomUUID());
         when(ticketService.validate(anyString(), any())).thenReturn(dto);
 
         mockMvc.perform(post("/tickets/{code}/validate", CODE).with(as(UserRole.ORGANIZER)))

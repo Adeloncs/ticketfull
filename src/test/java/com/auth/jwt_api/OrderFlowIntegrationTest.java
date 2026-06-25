@@ -67,7 +67,8 @@ class OrderFlowIntegrationTest {
                 .email("cust-" + UUID.randomUUID() + "@it.com").password("x").role(UserRole.CUSTOMER).build());
         Event event = eventRepository.save(Event.builder()
                 .title("Show de Integração").eventDate(Instant.now().plus(Duration.ofDays(30)))
-                .location("São Paulo").organizer(organizer).build());
+                .location("São Paulo").organizer(organizer)
+                .status(com.auth.jwt_api.models.EventStatus.PUBLISHED).build());
         TicketBatch batch = ticketBatchRepository.save(TicketBatch.builder()
                 .event(event).name("Pista").price(new BigDecimal("100.00"))
                 .totalCapacity(10).availableSeats(10).build());

@@ -63,7 +63,8 @@ class EventControllerTest {
     @DisplayName("POST /events: ORGANIZER cria evento -> 201")
     void create_shouldReturn201_forOrganizer() throws Exception {
         EventResponseDTO dto = new EventResponseDTO(UUID.randomUUID(), "Show", "d",
-                Instant.parse("2030-01-01T20:00:00Z"), "Arena", UUID.randomUUID(), null, null);
+                Instant.parse("2030-01-01T20:00:00Z"), "Arena", com.auth.jwt_api.models.EventStatus.DRAFT,
+                UUID.randomUUID(), null, null);
         when(eventService.create(any(), any())).thenReturn(dto);
 
         mockMvc.perform(post("/events").with(as(UserRole.ORGANIZER))

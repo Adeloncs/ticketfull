@@ -18,19 +18,26 @@ import com.auth.jwt_api.dtos.TicketResponseDTO;
 import com.auth.jwt_api.exceptions.EventOwnershipException;
 import com.auth.jwt_api.exceptions.TicketAlreadyUsedException;
 import com.auth.jwt_api.exceptions.TicketNotFoundException;
+import com.auth.jwt_api.exceptions.TicketTransferForbiddenException;
+import com.auth.jwt_api.exceptions.UserNotFoundException;
 import com.auth.jwt_api.models.Event;
+import com.auth.jwt_api.models.Order;
 import com.auth.jwt_api.models.Ticket;
 import com.auth.jwt_api.models.TicketBatch;
 import com.auth.jwt_api.models.TicketStatus;
 import com.auth.jwt_api.models.User;
 import com.auth.jwt_api.models.UserRole;
 import com.auth.jwt_api.repositories.TicketRepository;
+import com.auth.jwt_api.repositories.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
 class TicketServiceTest {
 
     @Mock
     private TicketRepository ticketRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private TicketService ticketService;
@@ -49,6 +56,19 @@ class TicketServiceTest {
                 .codeHash(CODE)
                 .status(status)
                 .ticketBatch(batch)
+                .build();
+    }
+
+    private Ticket transferableTicket(User owner, TicketStatus status) {
+        Order order = Order.builder().id(UUID.randomUUID()).customer(owner).build();
+        Event event = Event.builder().id(UUID.randomUUID()).organizer(owner).build();
+        TicketBatch batch = TicketBatch.builder().id(UUID.randomUUID()).event(event).build();
+        return Ticket.builder()
+                .id(UUID.randomUUID())
+                .order(order)
+                .ticketBatch(batch)
+                .codeHash("oldhash")
+                .status(status)
                 .build();
     }
 
@@ -97,5 +117,60 @@ class TicketServiceTest {
         when(ticketRepository.findByCodeHashForUpdate(CODE)).thenReturn(Optional.of(ticket));
 
         assertThrows(TicketAlreadyUsedException.class, () -> ticketService.validate(CODE, owner));
+    }
+
+    @Test
+    @DisplayName("transfer: reatribui o detentor e regenera o código (QR) para o novo dono")
+    void transfer_shouldReassignHolderAndRegenerateCode() {
+        User owner = user(UUID.randomUUID());
+        User target = user(UUID.randomUUID());
+        Ticket ticket = transferableTicket(owner, TicketStatus.VALID);
+
+        when(ticketRepository.findByIdForUpdate(ticket.getId())).thenReturn(Optional.of(ticket));
+        when(userRepository.findByEmail(target.getEmail())).thenReturn(Optional.of(target));
+
+        TicketResponseDTO result = ticketService.transfer(ticket.getId(), target.getEmail(), owner);
+
+        assertThat(ticket.getHolder()).isEqualTo(target);
+        assertThat(ticket.getCodeHash()).isNotEqualTo("oldhash");
+        assertThat(result.holderId()).isEqualTo(target.getId());
+    }
+
+    @Test
+    @DisplayName("transfer: lança TicketTransferForbiddenException quando o requester não é o detentor")
+    void transfer_shouldThrow_whenNotOwner() {
+        User owner = user(UUID.randomUUID());
+        User intruder = user(UUID.randomUUID());
+        Ticket ticket = transferableTicket(owner, TicketStatus.VALID);
+
+        when(ticketRepository.findByIdForUpdate(ticket.getId())).thenReturn(Optional.of(ticket));
+
+        assertThrows(TicketTransferForbiddenException.class,
+                () -> ticketService.transfer(ticket.getId(), "x@example.com", intruder));
+    }
+
+    @Test
+    @DisplayName("transfer: lança TicketAlreadyUsedException quando o ingresso já foi usado")
+    void transfer_shouldThrow_whenUsed() {
+        User owner = user(UUID.randomUUID());
+        Ticket ticket = transferableTicket(owner, TicketStatus.USED);
+
+        when(ticketRepository.findByIdForUpdate(ticket.getId())).thenReturn(Optional.of(ticket));
+
+        assertThrows(TicketAlreadyUsedException.class,
+                () -> ticketService.transfer(ticket.getId(), "x@example.com", owner));
+    }
+
+    @Test
+    @DisplayName("transfer: lança UserNotFoundException quando o destinatário não existe")
+    void transfer_shouldThrow_whenTargetMissing() {
+        User owner = user(UUID.randomUUID());
+        Ticket ticket = transferableTicket(owner, TicketStatus.VALID);
+
+        when(ticketRepository.findByIdForUpdate(ticket.getId())).thenReturn(Optional.of(ticket));
+        when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class,
+                () -> ticketService.transfer(ticket.getId(), "ghost@example.com", owner));
     }
 }
