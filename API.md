@@ -43,6 +43,7 @@ Regras de acesso:
 - `POST /admin/users`: apenas `ADMIN`
 - `POST /webhooks/payments`: publica (callback do gateway de pagamento)
 - `GET /events`, `GET /events/{id}`, `GET /events/{eventId}/ticket-batches`: publicas (sem autenticacao)
+- `GET /events/mine`: `ORGANIZER` ou `ADMIN`
 - `GET /me`: qualquer usuário autenticado
 - Demais rotas fora de `/auth` exigem autenticacao
 
@@ -268,6 +269,14 @@ Response `200 OK` (estrutura paginada `PagedModel`):
   }
 }
 ```
+
+### 6b. Listar meus eventos (organizador)
+
+`GET /events/mine`
+
+Requer `Authorization: Bearer <token>` com perfil `ORGANIZER` ou `ADMIN`. Lista os eventos do próprio organizador **em qualquer status** (inclui `DRAFT` e `CANCELLED`) — ao contrário de `GET /events`, que é público e só retorna `PUBLISHED`. Paginado (`page`, `size`, `sort`).
+
+Response `200 OK`: mesma estrutura paginada (`PagedModel`) de `GET /events`, com o campo `status` em cada item.
 
 ### 7. Buscar evento por ID
 

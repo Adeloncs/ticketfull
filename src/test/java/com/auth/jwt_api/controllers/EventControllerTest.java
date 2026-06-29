@@ -108,4 +108,27 @@ class EventControllerTest {
         mockMvc.perform(get("/events"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    @DisplayName("GET /events/mine: ORGANIZER lista os próprios eventos -> 200")
+    void listMine_shouldReturn200_forOrganizer() throws Exception {
+        when(eventService.findByOrganizer(any(), any())).thenReturn(Page.empty());
+
+        mockMvc.perform(get("/events/mine").with(as(UserRole.ORGANIZER)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /events/mine: CUSTOMER -> 403 (role)")
+    void listMine_shouldReturn403_forCustomer() throws Exception {
+        mockMvc.perform(get("/events/mine").with(as(UserRole.CUSTOMER)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /events/mine: sem autenticação -> 401")
+    void listMine_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/events/mine"))
+                .andExpect(status().isUnauthorized());
+    }
 }

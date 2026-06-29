@@ -61,6 +61,15 @@ public class EventController {
         return ResponseEntity.ok(new PagedModel<>(page));
     }
 
+    @GetMapping("/mine")
+    @Operation(summary = "Listar meus eventos (organizador) — inclui rascunhos, paginado")
+    public ResponseEntity<PagedModel<EventResponseDTO>> listMine(
+            @AuthenticationPrincipal User organizer,
+            @ParameterObject Pageable pageable) {
+        Page<EventResponseDTO> page = eventService.findByOrganizer(organizer, pageable);
+        return ResponseEntity.ok(new PagedModel<>(page));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Buscar evento por id")
     public ResponseEntity<EventResponseDTO> getById(@PathVariable UUID id) {

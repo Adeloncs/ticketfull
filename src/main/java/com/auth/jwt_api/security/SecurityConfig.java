@@ -61,6 +61,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Organizador lista os próprios eventos (inclui rascunhos) — antes do GET público
+                        .requestMatchers(HttpMethod.GET, "/events/mine").hasAnyRole("ORGANIZER", "ADMIN")
                         // Navegação de eventos e lotes é pública (clientes visualizam sem login)
                         .requestMatchers(HttpMethod.GET, "/events", "/events/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/events/*/ticket-batches").permitAll()

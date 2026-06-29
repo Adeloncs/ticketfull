@@ -65,6 +65,12 @@ public class EventService {
         return eventRepository.findAll(spec, pageable).map(EventResponseDTO::from);
     }
 
+    /** Lista os eventos do próprio organizador, em qualquer status (inclui rascunhos). */
+    @Transactional(readOnly = true)
+    public Page<EventResponseDTO> findByOrganizer(User organizer, Pageable pageable) {
+        return eventRepository.findByOrganizerId(organizer.getId(), pageable).map(EventResponseDTO::from);
+    }
+
     /** Atualiza os dados de um evento do próprio organizador. Não permitido em eventos cancelados. */
     @Transactional
     public EventResponseDTO update(UUID id, EventRequestDTO request, User organizer) {
