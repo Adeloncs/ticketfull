@@ -43,7 +43,10 @@ Regras de acesso:
 - `POST /admin/users`: apenas `ADMIN`
 - `POST /webhooks/payments`: publica (callback do gateway de pagamento)
 - `GET /events`, `GET /events/{id}`, `GET /events/{eventId}/ticket-batches`: publicas (sem autenticacao)
+- `GET /me`: qualquer usuário autenticado
 - Demais rotas fora de `/auth` exigem autenticacao
+
+O access token (JWT) inclui um claim `role` (ex.: `CUSTOMER`, `ORGANIZER`, `ADMIN`, `USER`) para uso do cliente em decisões de UI. **A autorização continua sendo aplicada no servidor** a partir do papel persistido — o claim é apenas informativo. Para obter o perfil de forma autoritativa, use `GET /me`.
 
 ## Domínio: ciclo de vida e features
 
@@ -166,6 +169,28 @@ Responses:
 - `400 Bad Request`: payload invalido
 - `403 Forbidden`: perfil sem permissao
 - `409 Conflict`: usuario ja existente
+
+### 4c. Perfil do usuário autenticado
+
+`GET /me`
+
+Requer `Authorization: Bearer <token>`. Retorna os dados do usuário autenticado, incluindo o papel — útil para o cliente decidir o que exibir (menus, telas de organizador/admin).
+
+Response `200 OK`:
+
+```json
+{
+  "id": "7b5f9df6-00f0-4dfa-8d45-2a5fe59076f1",
+  "email": "organizador@ticketfull.com",
+  "role": "ORGANIZER",
+  "createdAt": "2026-06-23T12:00:00Z"
+}
+```
+
+Possiveis respostas:
+
+- `200 OK`: perfil retornado
+- `401 Unauthorized`: token ausente ou invalido
 
 ### 5. Criar evento
 

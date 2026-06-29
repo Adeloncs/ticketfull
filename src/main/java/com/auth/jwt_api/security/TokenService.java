@@ -32,6 +32,7 @@ public class TokenService {
         return Jwts.builder()
                 .id(UUID.randomUUID().toString()) // jti: identifica o token para revogação
                 .subject(user.getEmail())
+                .claim("role", user.getRole().name()) // papel para autorização no cliente (não é fonte de verdade)
                 .issuedAt(now)
                 .expiration(expiryDate)
                 .signWith(getSigningKey())
@@ -54,6 +55,12 @@ public class TokenService {
     public Instant extractExpiration(String token) {
         Claims claims = parseClaims(token);
         return claims == null ? null : claims.getExpiration().toInstant();
+    }
+
+    /** Papel (role) embutido no token, ou {@code null} se inválido/ausente. */
+    public String extractRole(String token) {
+        Claims claims = parseClaims(token);
+        return claims == null ? null : claims.get("role", String.class);
     }
 
     private Claims parseClaims(String token) {
