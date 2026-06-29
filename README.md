@@ -165,6 +165,8 @@ API disponível em `http://localhost:8081`.
 ./mvnw spring-boot:run
 ```
 
+Se existir um arquivo `.env` na raiz do projeto, ele será carregado automaticamente pelo Spring Boot.
+
 Com segredo explícito:
 
 ```bash
